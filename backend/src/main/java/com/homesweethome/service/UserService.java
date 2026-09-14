@@ -1,5 +1,6 @@
 package com.homesweethome.service;
 
+import com.homesweethome.dto.AuthenticationResponse;
 import com.homesweethome.entity.User;
 import com.homesweethome.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
@@ -19,8 +20,8 @@ public class UserService {
     private final JwtService jwtService;
     private final AuthenticationManager authenticationManager;
 
-    // Registers user, hashes password, and returns a JWT token
-    public String registerUser(String email, String rawPassword) {
+    // Registers user, hashes password, and returns a JWT token + user data
+    public AuthenticationResponse registerUser(String email, String rawPassword) {
         Optional<User> existingUser = userRepository.findByEmail(email);
         if (existingUser.isPresent()) {
             throw new IllegalArgumentException("A user with this email already exists.");
@@ -28,16 +29,17 @@ public class UserService {
 
         User newUser = User.builder()
                 .email(email)
-                .passwordHash(passwordEncoder.encode(rawPassword)) // SECURELY HASHED!
+                .passwordHash(passwordEncoder.encode(rawPassword))
                 .build();
 
-        userRepository.save(newUser);
-        return jwtService.generateToken(newUser);
+        User savedUser = userRepository.save(newUser);
+        String token = jwtService.generateToken(savedUser);
+
+        return new AuthenticationResponse(token, savedUser.getId(), savedUser.getEmail());
     }
 
-    // Authenticates user and returns a JWT token
-    public String loginUser(String email, String rawPassword) {
-        // This will throw an exception if the password doesn't match the hash in the DB
+    // Authenticates user and returns a JWT token + user data
+    public AuthenticationResponse loginUser(String email, String rawPassword) {
         authenticationManager.authenticate(
                 new UsernamePasswordAuthenticationToken(email, rawPassword)
         );
@@ -45,6 +47,8 @@ public class UserService {
         User user = userRepository.findByEmail(email)
                 .orElseThrow(() -> new IllegalArgumentException("User not found"));
                 
-        return jwtService.generateToken(user);
+        String token = jwtService.generateToken(user);
+
+        return new AuthenticationResponse(token, user.getId(), user.getEmail());
     }
 }

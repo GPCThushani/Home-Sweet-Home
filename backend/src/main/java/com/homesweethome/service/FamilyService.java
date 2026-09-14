@@ -9,6 +9,8 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.UUID;
+
 @Service
 @RequiredArgsConstructor
 public class FamilyService {
@@ -37,5 +39,20 @@ public class FamilyService {
         familyMemberRepository.save(creatorMember);
 
         return savedFamily;
+    }
+
+    @Transactional
+    public FamilyMember joinFamily(UUID familyId, User user, String nickname, String role) {
+        Family family = familyRepository.findById(familyId)
+                .orElseThrow(() -> new IllegalArgumentException("Family not found"));
+
+        FamilyMember newMember = FamilyMember.builder()
+                .family(family)
+                .user(user)
+                .nickname(nickname)
+                .role(role)
+                .build();
+
+        return familyMemberRepository.save(newMember);
     }
 }

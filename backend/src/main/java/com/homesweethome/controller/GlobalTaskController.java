@@ -51,4 +51,11 @@ public class GlobalTaskController {
         List<GlobalTask> tasks = globalTaskService.getPendingTasksForFamily(familyId);
         return ResponseEntity.ok(tasks);
     }
+
+    // 3. Mark a task as completed
+    @PutMapping("/{taskId}/complete")
+    public ResponseEntity<GlobalTask> completeTask(@PathVariable UUID taskId) {
+        GlobalTask completedTask = globalTaskService.completeTask(taskId);
+        return ResponseEntity.ok(completedTask);
+    }
 }

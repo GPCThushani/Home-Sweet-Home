@@ -1,5 +1,6 @@
 package com.homesweethome.controller;
 
+import com.homesweethome.dto.AuthenticationResponse;
 import com.homesweethome.dto.UserRegistrationRequest;
 import com.homesweethome.service.UserService;
 import lombok.RequiredArgsConstructor;
@@ -14,11 +15,12 @@ public class UserController {
     private final UserService userService;
 
     @PostMapping("/register")
-    public ResponseEntity<String> registerUser(@RequestBody UserRegistrationRequest request) {
-        // Pass the data from the incoming request to our Service layer
-        String newUser = userService.registerUser(request.email(), request.password());
-        
-        // Return a 200 OK status along with the newly created user data
-        return ResponseEntity.ok(newUser);
+    public ResponseEntity<AuthenticationResponse> registerUser(@RequestBody UserRegistrationRequest request) {
+        return ResponseEntity.ok(userService.registerUser(request.email(), request.password()));
+    }
+
+    @PostMapping("/login")
+    public ResponseEntity<AuthenticationResponse> loginUser(@RequestBody UserRegistrationRequest request) {
+        return ResponseEntity.ok(userService.loginUser(request.email(), request.password()));
     }
 }
