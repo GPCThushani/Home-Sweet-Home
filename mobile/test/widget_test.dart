@@ -1,5 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
-import '../lib/main.dart'; // Changed to a relative import
+import 'package:mobile/main.dart';
 
 void main() {
   testWidgets('App should build successfully', (WidgetTester tester) async {

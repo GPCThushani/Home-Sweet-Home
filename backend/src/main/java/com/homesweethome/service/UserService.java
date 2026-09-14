@@ -3,6 +3,9 @@ package com.homesweethome.service;
 import com.homesweethome.entity.User;
 import com.homesweethome.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
+import org.springframework.security.authentication.AuthenticationManager;
+import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
+import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 
 import java.util.Optional;
@@ -12,28 +15,36 @@ import java.util.Optional;
 public class UserService {
 
     private final UserRepository userRepository;
+    private final PasswordEncoder passwordEncoder;
+    private final JwtService jwtService;
+    private final AuthenticationManager authenticationManager;
 
-    // Registers a new user
-    public User registerUser(String email, String rawPassword) {
-        // Check if user already exists
+    // Registers user, hashes password, and returns a JWT token
+    public String registerUser(String email, String rawPassword) {
         Optional<User> existingUser = userRepository.findByEmail(email);
         if (existingUser.isPresent()) {
             throw new IllegalArgumentException("A user with this email already exists.");
         }
 
-        // TODO: Hash the password securely using Spring Security BCrypt later
-        String hashedPassword = rawPassword; 
-
         User newUser = User.builder()
                 .email(email)
-                .passwordHash(hashedPassword)
+                .passwordHash(passwordEncoder.encode(rawPassword)) // SECURELY HASHED!
                 .build();
 
-        return userRepository.save(newUser);
+        userRepository.save(newUser);
+        return jwtService.generateToken(newUser);
     }
 
-    // Finds a user by email (useful for login)
-    public Optional<User> getUserByEmail(String email) {
-        return userRepository.findByEmail(email);
+    // Authenticates user and returns a JWT token
+    public String loginUser(String email, String rawPassword) {
+        // This will throw an exception if the password doesn't match the hash in the DB
+        authenticationManager.authenticate(
+                new UsernamePasswordAuthenticationToken(email, rawPassword)
+        );
+        
+        User user = userRepository.findByEmail(email)
+                .orElseThrow(() -> new IllegalArgumentException("User not found"));
+                
+        return jwtService.generateToken(user);
     }
 }

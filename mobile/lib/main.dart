@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
-import 'core/theme/app_theme.dart';
-import 'features/onboarding/screens/splash_screen.dart';
+import 'package:mobile/core/theme/app_theme.dart';
+import 'package:mobile/features/onboarding/screens/splash_screen.dart';
 
 void main() {
   runApp(const HomeSweetHomeApp());

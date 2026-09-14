@@ -1,7 +1,6 @@
 package com.homesweethome.controller;
 
 import com.homesweethome.dto.UserRegistrationRequest;
-import com.homesweethome.entity.User;
 import com.homesweethome.service.UserService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
@@ -15,9 +14,9 @@ public class UserController {
     private final UserService userService;
 
     @PostMapping("/register")
-    public ResponseEntity<User> registerUser(@RequestBody UserRegistrationRequest request) {
+    public ResponseEntity<String> registerUser(@RequestBody UserRegistrationRequest request) {
         // Pass the data from the incoming request to our Service layer
-        User newUser = userService.registerUser(request.email(), request.password());
+        String newUser = userService.registerUser(request.email(), request.password());
         
         // Return a 200 OK status along with the newly created user data
         return ResponseEntity.ok(newUser);
