@@ -1,4 +1,4 @@
-package com.homesweethome.backend;
+package com.homesweethome;
 
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
