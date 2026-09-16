@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:mobile/core/theme/app_theme.dart';
-import 'package:mobile/features/onboarding/screens/splash_screen.dart';
+import 'package:mobile/features/onboarding/screens/welcome_screen.dart';
 
 void main() {
   runApp(const HomeSweetHomeApp());
@@ -15,7 +15,7 @@ class HomeSweetHomeApp extends StatelessWidget {
       title: 'Home Sweet Home',
       theme: AppTheme.lightTheme,
       debugShowCheckedModeBanner: false,
-      home: const SplashScreen(),
+      home: const WelcomeScreen(),
     );
   }
 }
