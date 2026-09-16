@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'sign_up_screen.dart';
+import 'login_screen.dart';
 
 class WelcomeScreen extends StatelessWidget {
   const WelcomeScreen({super.key});
@@ -11,7 +13,6 @@ class WelcomeScreen extends StatelessWidget {
       backgroundColor: backgroundColor,
       body: Stack(
         children: [
-          // --- 1. THE BACKGROUND LANDSCAPE ---
           Align(
             alignment: Alignment.bottomCenter,
             child: ShaderMask(
@@ -27,42 +28,38 @@ class WelcomeScreen extends StatelessWidget {
               child: Image.asset(
                 'assets/images/welcome_bg.jpg', 
                 width: double.infinity,
-                height: MediaQuery.of(context).size.height * 0.7, 
+                height: MediaQuery.of(context).size.height * 0.65, 
                 fit: BoxFit.cover,
                 alignment: Alignment.topCenter,
               ),
             ),
           ),
-
-          // --- 2. THE FOREGROUND CONTENT ---
           SafeArea(
             child: Column(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                
-                // TOP SECTION: Centered, larger logo (Text removed!)
                 Expanded(
                   child: Center(
                     child: Image.asset(
                       'assets/images/logo.png', 
-                      width: MediaQuery.of(context).size.width * 0.75, // Makes the logo big!
+                      width: MediaQuery.of(context).size.width * 0.75, 
                       fit: BoxFit.contain,
                       errorBuilder: (context, error, stackTrace) => 
                           const Icon(Icons.favorite_border, size: 100, color: Color(0xFF4A8B71)),
                     ),
                   ),
                 ),
-                
-                // BOTTOM SECTION: Buttons (Shifted downwards)
                 Padding(
-                  // Reduced bottom padding from 40 to 16 to slide the buttons down
                   padding: const EdgeInsets.only(bottom: 16.0, left: 24, right: 24),
                   child: Column(
                     mainAxisSize: MainAxisSize.min,
                     children: [
                       ElevatedButton(
                         onPressed: () {
-                          // TODO: Navigate to Registration
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(builder: (context) => const SignUpScreen()),
+                          );
                         },
                         style: ElevatedButton.styleFrom(
                           backgroundColor: const Color(0xFF4A8B71), 
@@ -77,10 +74,13 @@ class WelcomeScreen extends StatelessWidget {
                           style: TextStyle(fontSize: 18, color: Colors.white, fontWeight: FontWeight.bold)
                         ),
                       ),
-                      const SizedBox(height: 8), // Tightened the gap slightly
+                      const SizedBox(height: 8), 
                       TextButton(
                         onPressed: () {
-                          // TODO: Navigate to Login
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(builder: (context) => const LoginScreen()),
+                          );
                         },
                         style: TextButton.styleFrom(
                           minimumSize: const Size(double.infinity, 56),
