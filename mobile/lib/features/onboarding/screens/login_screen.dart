@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:mobile/features/home/screens/home_screen.dart';
+import 'create_or_join_family_screen.dart'; // Import Step 3 screen
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -24,6 +26,7 @@ class _LoginScreenState extends State<LoginScreen> {
     super.dispose();
   }
 
+  // --- THE BACKEND CONNECTION & JWT LOGIC ---
   Future<void> _loginUser() async {
     final email = _emailController.text.trim();
     final password = _passwordController.text;
@@ -48,17 +51,40 @@ class _LoginScreenState extends State<LoginScreen> {
       );
 
       if (response.statusCode == 200) {
+        // Extract JWT token from Spring Boot response if available
+        final data = jsonDecode(response.body);
+        final token = data['token'] ?? data['accessToken'] ?? 'mock_jwt_token';
+
+        // Save token locally using SharedPreferences
+        final prefs = await SharedPreferences.getInstance();
+        await prefs.setString('jwt_token', token);
+        await prefs.setString('user_email', email);
+
+        // Check if this user has already completed family setup
+        final hasFamily = prefs.getBool('has_family') ?? false;
+
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(content: Text("Logged in successfully!"), backgroundColor: Colors.green),
           );
           
-          Navigator.pushReplacement(
-            context,
-            MaterialPageRoute(
-              builder: (context) => HomeScreen(userEmail: email),
-            ),
-          );
+          if (!hasFamily) {
+            // Step 3: Route to Family Setup Flow if not completed yet, passing userEmail along[cite: 7]
+            Navigator.pushReplacement(
+              context,
+              MaterialPageRoute(
+                builder: (context) => CreateOrJoinFamilyScreen(userEmail: email),
+              ),
+            );
+          } else {
+            // Fully set up -> Go straight to Home Dashboard
+            Navigator.pushReplacement(
+              context,
+              MaterialPageRoute(
+                builder: (context) => HomeScreen(userEmail: email),
+              ),
+            );
+          }
         }
       } else if (response.statusCode == 401 || response.statusCode == 403) {
         _showError("Invalid email or password.");
@@ -110,7 +136,7 @@ class _LoginScreenState extends State<LoginScreen> {
                   ),
                   child: ClipOval(
                     child: Padding(
-                      padding: const EdgeInsets.all(2.0), // Maximizes the logo size inside the circle
+                      padding: const EdgeInsets.all(2.0), 
                       child: Image.asset(
                         'assets/images/logo1.png', 
                         fit: BoxFit.contain,

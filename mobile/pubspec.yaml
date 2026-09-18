@@ -11,6 +11,8 @@ dependencies:
   cupertino_icons: ^1.0.8
   google_fonts: ^8.1.0
   http: ^1.6.0
+  shared_preferences: ^2.2.3
+  image_picker: ^1.2.2
 
 dev_dependencies:
   flutter_test:
@@ -20,3 +22,6 @@ flutter:
   uses-material-design: true
   assets:
     - assets/images/
+    - assets/images/family_avatars/
+    - assets/images/family_members/
+    
