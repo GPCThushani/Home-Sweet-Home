@@ -4,6 +4,7 @@ import 'dart:convert';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'choose_family_screen.dart';
 import 'create_or_join_family_screen.dart';
+import 'sign_up_screen.dart'; // Import your SignUpScreen file
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -59,7 +60,7 @@ class _LoginScreenState extends State<LoginScreen> {
         await prefs.setString('jwt_token', token);
         await prefs.setString('user_email', email);
         if (userId != null) {
-          await prefs.setString('user_id', userId); // <-- SAVED LOCALLY FOR ONBOARDING
+          await prefs.setString('user_id', userId);
         }
 
         final hasFamily = prefs.getBool('has_family') ?? false;
@@ -225,6 +226,36 @@ class _LoginScreenState extends State<LoginScreen> {
                         'Log In',
                         style: TextStyle(fontSize: 18, color: Colors.white, fontWeight: FontWeight.bold),
                       ),
+              ),
+              const SizedBox(height: 24),
+
+              // --- SIGN UP ROUTING ROW ---
+              Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Text(
+                    "Don't you have an account? ",
+                    style: TextStyle(fontSize: 14, color: Colors.grey.shade600),
+                  ),
+                  GestureDetector(
+                    onTap: () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (context) => const SignUpScreen(),
+                        ),
+                      );
+                    },
+                    child: const Text(
+                      'SignUp',
+                      style: TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.bold,
+                        color: Color(0xFF4A8B71),
+                      ),
+                    ),
+                  ),
+                ],
               ),
               const SizedBox(height: 40),
             ],

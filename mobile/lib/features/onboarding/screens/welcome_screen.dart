@@ -50,10 +50,11 @@ class WelcomeScreen extends StatelessWidget {
                   ),
                 ),
                 Padding(
-                  padding: const EdgeInsets.only(bottom: 16.0, left: 24, right: 24),
+                  padding: const EdgeInsets.only(bottom: 24.0, left: 24, right: 24),
                   child: Column(
                     mainAxisSize: MainAxisSize.min,
                     children: [
+                      // --- GET STARTED BUTTON (Translucent Dark Glass with White Text) ---
                       ElevatedButton(
                         onPressed: () {
                           Navigator.push(
@@ -62,39 +63,47 @@ class WelcomeScreen extends StatelessWidget {
                           );
                         },
                         style: ElevatedButton.styleFrom(
-                          backgroundColor: const Color(0xFF4A8B71), 
+                          backgroundColor: const Color(0xFF244032).withValues(alpha: 0.55), 
+                          foregroundColor: Colors.white,
                           minimumSize: const Size(double.infinity, 56), 
+                          elevation: 0,
                           shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(16), 
+                            borderRadius: BorderRadius.circular(16),
+                            side: BorderSide(color: Colors.white.withValues(alpha: 0.3), width: 1.5),
                           ),
-                          elevation: 3, 
                         ),
                         child: const Text(
                           'Get Started', 
                           style: TextStyle(fontSize: 18, color: Colors.white, fontWeight: FontWeight.bold)
                         ),
                       ),
-                      const SizedBox(height: 8), 
-                      TextButton(
+                      const SizedBox(height: 12), 
+                      
+                      // --- LOG IN BUTTON (Matching Translucent Dark Glass with White Text) ---
+                      ElevatedButton(
                         onPressed: () {
                           Navigator.push(
                             context,
                             MaterialPageRoute(builder: (context) => const LoginScreen()),
                           );
                         },
-                        style: TextButton.styleFrom(
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: const Color(0xFF244032).withValues(alpha: 0.55), 
+                          foregroundColor: Colors.white,
                           minimumSize: const Size(double.infinity, 56),
+                          elevation: 0,
                           shape: RoundedRectangleBorder(
                             borderRadius: BorderRadius.circular(16),
+                            side: BorderSide(color: Colors.white.withValues(alpha: 0.3), width: 1.5),
                           ),
                         ),
                         child: const Text(
-                          'I already have an account', 
+                          'Log In', 
                           style: TextStyle(
-                            fontSize: 16, 
-                            color: Color(0xFF1E362A), 
+                            fontSize: 18, 
+                            color: Colors.white, 
                             fontWeight: FontWeight.bold
-                          )
+                          ),
                         ),
                       ),
                     ],

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'family_setup_screen.dart'; // Import Step 4 screen
+import 'join_family_bottom_sheet.dart'; // Import the join bottom sheet dialog
 
 class CreateOrJoinFamilyScreen extends StatelessWidget {
   final String userEmail;
@@ -88,7 +89,16 @@ class CreateOrJoinFamilyScreen extends StatelessWidget {
                 title: 'Join an existing family',
                 subtitle: 'Use an invite code from a family member',
                 onTap: () {
-                  // TODO: Navigate to Join Family Code Input
+                  // Opens the Join Family bottom sheet dialog
+                  showModalBottomSheet(
+                    context: context,
+                    isScrollControlled: true,
+                    backgroundColor: Colors.white,
+                    shape: const RoundedRectangleBorder(
+                      borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+                    ),
+                    builder: (context) => JoinFamilyBottomSheet(userEmail: userEmail),
+                  );
                 },
               ),
               const Spacer(),

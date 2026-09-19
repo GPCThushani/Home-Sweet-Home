@@ -38,6 +38,9 @@ public class Family {
     @Column(name = "avatar_path")
     private String avatarPath; // Custom or preset avatar path/URL
 
+    @Column(name = "invite_code", unique = true)
+    private String inviteCode; // <-- NEW: Unique code for members to join
+
     @Builder.Default
     @Column(length = 50)
     private String timezone = "Asia/Colombo"; 

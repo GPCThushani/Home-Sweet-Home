@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 import 'create_or_join_family_screen.dart';
+import 'join_family_bottom_sheet.dart';
 import '../../home/screens/home_screen.dart';
 
 class FamilyModel {
@@ -314,6 +315,7 @@ class _ChooseFamilyScreenState extends State<ChooseFamilyScreen> {
 
               const SizedBox(height: 16),
 
+              // Create family button
               OutlinedButton.icon(
                 onPressed: () {
                   Navigator.push(
@@ -331,7 +333,7 @@ class _ChooseFamilyScreenState extends State<ChooseFamilyScreen> {
                   size: 22,
                 ),
                 label: const Text(
-                  'Add another family',
+                  'Create a family space',
                   style: TextStyle(
                     color: Color(0xFF4A8B71),
                     fontWeight: FontWeight.bold,
@@ -348,6 +350,43 @@ class _ChooseFamilyScreenState extends State<ChooseFamilyScreen> {
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(16),
                   ),
+                ),
+              ),
+              const SizedBox(height: 12),
+
+              // Join with invite code button
+              ElevatedButton.icon(
+                onPressed: () {
+                  showModalBottomSheet(
+                    context: context,
+                    isScrollControlled: true,
+                    backgroundColor: Colors.white,
+                    shape: const RoundedRectangleBorder(
+                      borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+                    ),
+                    builder: (context) => JoinFamilyBottomSheet(userEmail: widget.userEmail),
+                  );
+                },
+                icon: const Icon(
+                  Icons.group_add_rounded,
+                  color: Colors.white,
+                  size: 22,
+                ),
+                label: const Text(
+                  'Join with Invite Code',
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontWeight: FontWeight.bold,
+                    fontSize: 16,
+                  ),
+                ),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFF4A8B71),
+                  minimumSize: const Size(double.infinity, 56),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(16),
+                  ),
+                  elevation: 0,
                 ),
               ),
               const SizedBox(height: 20),
