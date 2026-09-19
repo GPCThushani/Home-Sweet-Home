@@ -239,6 +239,7 @@ class _FamilySetupScreenState extends State<FamilySetupScreen> {
                     return;
                   }
 
+                  // PASSING CUSTOM IMAGE PATH AND PRESET INDEX FORWARD
                   Navigator.push(
                     context,
                     MaterialPageRoute(

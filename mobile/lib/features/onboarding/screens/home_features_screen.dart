@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'home_ready_screen.dart'; // Import the celebration screen
+import 'home_ready_screen.dart';
 
 class HomeFeatureItem {
   final String title;
@@ -109,7 +109,7 @@ class _HomeFeaturesScreenState extends State<HomeFeaturesScreen> {
               const SizedBox(height: 16),
               ElevatedButton(
                 onPressed: () {
-                  // Navigate to Step 7: "Your home is ready!" celebration screen
+                  // PASSES EVERYTHING ONWARD TO HOMEREADYSCREEN
                   Navigator.push(
                     context,
                     MaterialPageRoute(

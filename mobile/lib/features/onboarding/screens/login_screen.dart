@@ -2,8 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:mobile/features/home/screens/home_screen.dart';
-import 'create_or_join_family_screen.dart'; // Import Step 3 screen
+import 'choose_family_screen.dart';
+import 'create_or_join_family_screen.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -26,7 +26,6 @@ class _LoginScreenState extends State<LoginScreen> {
     super.dispose();
   }
 
-  // --- THE BACKEND CONNECTION & JWT LOGIC ---
   Future<void> _loginUser() async {
     final email = _emailController.text.trim();
     final password = _passwordController.text;
@@ -51,16 +50,18 @@ class _LoginScreenState extends State<LoginScreen> {
       );
 
       if (response.statusCode == 200) {
-        // Extract JWT token from Spring Boot response if available
         final data = jsonDecode(response.body);
+        
         final token = data['token'] ?? data['accessToken'] ?? 'mock_jwt_token';
+        final userId = data['userId']?.toString();
 
-        // Save token locally using SharedPreferences
         final prefs = await SharedPreferences.getInstance();
         await prefs.setString('jwt_token', token);
         await prefs.setString('user_email', email);
+        if (userId != null) {
+          await prefs.setString('user_id', userId); // <-- SAVED LOCALLY FOR ONBOARDING
+        }
 
-        // Check if this user has already completed family setup
         final hasFamily = prefs.getBool('has_family') ?? false;
 
         if (mounted) {
@@ -69,7 +70,6 @@ class _LoginScreenState extends State<LoginScreen> {
           );
           
           if (!hasFamily) {
-            // Step 3: Route to Family Setup Flow if not completed yet, passing userEmail along[cite: 7]
             Navigator.pushReplacement(
               context,
               MaterialPageRoute(
@@ -77,11 +77,10 @@ class _LoginScreenState extends State<LoginScreen> {
               ),
             );
           } else {
-            // Fully set up -> Go straight to Home Dashboard
             Navigator.pushReplacement(
               context,
               MaterialPageRoute(
-                builder: (context) => HomeScreen(userEmail: email),
+                builder: (context) => ChooseFamilyScreen(userEmail: email),
               ),
             );
           }
@@ -123,8 +122,6 @@ class _LoginScreenState extends State<LoginScreen> {
             crossAxisAlignment: CrossAxisAlignment.start, 
             children: [
               const SizedBox(height: 10),
-
-              // --- FIXED-SIZE ROUND LOGO AT THE TOP ---
               Center(
                 child: Container(
                   width: 120,
@@ -153,8 +150,6 @@ class _LoginScreenState extends State<LoginScreen> {
                 ),
               ),
               const SizedBox(height: 24),
-
-              // --- TWO SENTENCES UNDERNEATH THE LOGO ---
               Center(
                 child: Column(
                   children: [
@@ -230,39 +225,6 @@ class _LoginScreenState extends State<LoginScreen> {
                         'Log In',
                         style: TextStyle(fontSize: 18, color: Colors.white, fontWeight: FontWeight.bold),
                       ),
-              ),
-
-              const SizedBox(height: 16),
-
-              // --- GOOGLE SIGN-IN BUTTON ---
-              OutlinedButton(
-                onPressed: () {
-                  // TODO: Google Sign-in logic
-                },
-                style: OutlinedButton.styleFrom(
-                  backgroundColor: Colors.white,
-                  side: BorderSide(color: Colors.grey.shade300, width: 1.5),
-                  minimumSize: const Size(double.infinity, 56),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-                ),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Image.asset(
-                      'assets/images/google.png', 
-                      height: 24,
-                      errorBuilder: (context, error, stackTrace) => const Text(
-                        'G', 
-                        style: TextStyle(color: Color(0xFF4285F4), fontSize: 24, fontWeight: FontWeight.bold)
-                      ),
-                    ),
-                    const SizedBox(width: 12),
-                    const Text(
-                      'Continue with Google',
-                      style: TextStyle(fontSize: 16, color: Colors.black87, fontWeight: FontWeight.w600),
-                    ),
-                  ],
-                ),
               ),
               const SizedBox(height: 40),
             ],

@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'home_features_screen.dart';
+import 'home_features_screen.dart'; // <-- NAVIGATES TO FEATURES SCREEN FIRST
 
 class FamilyMember {
   String name;
@@ -491,6 +491,7 @@ class _AddFamilyMembersScreenState extends State<AddFamilyMembersScreen> {
               const SizedBox(height: 16),
               ElevatedButton(
                 onPressed: () {
+                  // PASSES PARAMETERS FORWARD TO HOMESCREEN FEATURES SELECTION
                   Navigator.push(
                     context,
                     MaterialPageRoute(

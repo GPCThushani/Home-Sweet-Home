@@ -11,6 +11,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.List;
 import java.util.UUID;
 
 @RestController
@@ -21,18 +22,23 @@ public class FamilyController {
     private final FamilyService familyService;
     private final UserRepository userRepository;
 
+    @GetMapping("/user")
+    public ResponseEntity<List<Family>> getFamiliesByUserEmail(@RequestParam String email) {
+        List<Family> families = familyService.getFamiliesByUserEmail(email);
+        return ResponseEntity.ok(families);
+    }
+
     @PostMapping
     public ResponseEntity<Family> createFamily(@RequestBody CreateFamilyRequest request) {
-        // 1. Verify the user actually exists in the database
         User creator = userRepository.findById(request.creatorId())
                 .orElseThrow(() -> new IllegalArgumentException("User not found"));
 
-        // 2. Trigger the transactional service to create the Family and FamilyMember bridge
         Family newFamily = familyService.createFamily(
                 request.familyName(),
                 request.timezone(),
                 creator,
-                request.creatorNickname()
+                request.creatorNickname(),
+                request.avatarPath()
         );
 
         return ResponseEntity.ok(newFamily);

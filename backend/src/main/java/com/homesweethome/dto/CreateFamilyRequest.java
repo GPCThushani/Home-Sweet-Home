@@ -6,5 +6,6 @@ public record CreateFamilyRequest(
     String familyName,
     String timezone,
     UUID creatorId,
-    String creatorNickname
+    String creatorNickname,
+    String avatarPath
 ) {}

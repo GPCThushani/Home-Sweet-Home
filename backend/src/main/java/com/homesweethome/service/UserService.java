@@ -20,7 +20,6 @@ public class UserService {
     private final JwtService jwtService;
     private final AuthenticationManager authenticationManager;
 
-    // Registers user, hashes password, and returns a JWT token + user data
     public AuthenticationResponse registerUser(String email, String rawPassword) {
         Optional<User> existingUser = userRepository.findByEmail(email);
         if (existingUser.isPresent()) {
@@ -35,10 +34,10 @@ public class UserService {
         User savedUser = userRepository.save(newUser);
         String token = jwtService.generateToken(savedUser);
 
+        // Returns token, userId (UUID), and email
         return new AuthenticationResponse(token, savedUser.getId(), savedUser.getEmail());
     }
 
-    // Authenticates user and returns a JWT token + user data
     public AuthenticationResponse loginUser(String email, String rawPassword) {
         authenticationManager.authenticate(
                 new UsernamePasswordAuthenticationToken(email, rawPassword)
@@ -50,5 +49,11 @@ public class UserService {
         String token = jwtService.generateToken(user);
 
         return new AuthenticationResponse(token, user.getId(), user.getEmail());
+    }
+
+    // --- ADDED FALLBACK METHOD ---
+    public User getUserByEmail(String email) {
+        return userRepository.findByEmail(email)
+                .orElseThrow(() -> new IllegalArgumentException("User not found with email: " + email));
     }
 }

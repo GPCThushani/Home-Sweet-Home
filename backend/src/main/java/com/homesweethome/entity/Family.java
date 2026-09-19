@@ -25,7 +25,19 @@ public class Family {
     @Column(nullable = false)
     private String name; // e.g., "The Perera Family"
 
-    // Defaulting to Sri Lanka time as discussed in the architecture
+    @Column(length = 255)
+    private String motto; // e.g., "Together Always"
+
+    @Column(name = "member_count")
+    @Builder.Default
+    private int memberCount = 1;
+
+    @Column(name = "admin_email", nullable = false)
+    private String adminEmail; // Links the family to the creator's email
+
+    @Column(name = "avatar_path")
+    private String avatarPath; // Custom or preset avatar path/URL
+
     @Builder.Default
     @Column(length = 50)
     private String timezone = "Asia/Colombo"; 

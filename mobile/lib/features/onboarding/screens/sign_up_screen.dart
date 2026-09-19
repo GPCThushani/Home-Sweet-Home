@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'create_or_join_family_screen.dart';
 
 class SignUpScreen extends StatefulWidget {
   const SignUpScreen({super.key});
@@ -19,7 +21,6 @@ class _SignUpScreenState extends State<SignUpScreen> {
   bool _isConfirmPasswordHidden = true;
   bool _isLoading = false; 
 
-  // Real-time Validation States for Password
   bool _hasMinLength = false;
   bool _hasLetter = false;
   bool _hasNumber = false;
@@ -48,7 +49,6 @@ class _SignUpScreenState extends State<SignUpScreen> {
     super.dispose();
   }
 
-  // --- THE BACKEND CONNECTION LOGIC ---
   Future<void> _registerUser() async {
     final email = _emailController.text.trim();
     final password = _passwordController.text;
@@ -79,22 +79,40 @@ class _SignUpScreenState extends State<SignUpScreen> {
         body: jsonEncode({
           'email': email,
           'password': password,
-          'nickname': _nameController.text.trim(), 
         }),
       );
 
       if (response.statusCode == 200 || response.statusCode == 201) {
+        final data = jsonDecode(response.body);
+        
+        // Extract userId and token from AuthenticationResponse
+        final userId = data['userId']?.toString();
+        final token = data['token']?.toString();
+
+        final prefs = await SharedPreferences.getInstance();
+        await prefs.setString('user_email', email);
+        if (userId != null) {
+          await prefs.setString('user_id', userId); // <-- SAVED LOCALLY FOR ONBOARDING
+        }
+        if (token != null) {
+          await prefs.setString('jwt_token', token);
+        }
+
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(content: Text("Account created successfully!"), backgroundColor: Colors.green),
           );
-          // TODO: Navigate to Welcome/Home screen
+          
+          Navigator.pushReplacement(
+            context,
+            MaterialPageRoute(
+              builder: (context) => CreateOrJoinFamilyScreen(userEmail: email),
+            ),
+          );
         }
       } else if (response.statusCode == 500 || response.statusCode == 409) {
-        // Intercepting the server error for duplicate emails
         _showError("An account is already registered under this email. Please log in instead.");
       } else {
-        // A generic fallback for other unexpected errors
         _showError("Something went wrong. Please try again later.");
       }
     } catch (e) {
@@ -222,39 +240,6 @@ class _SignUpScreenState extends State<SignUpScreen> {
                         'Create account',
                         style: TextStyle(fontSize: 18, color: Colors.white, fontWeight: FontWeight.bold),
                       ),
-              ),
-
-              const SizedBox(height: 16),
-
-              // --- GOOGLE SIGN-IN BUTTON ---
-              OutlinedButton(
-                onPressed: () {
-                  // TODO: Google Sign-in logic
-                },
-                style: OutlinedButton.styleFrom(
-                  backgroundColor: Colors.white,
-                  side: BorderSide(color: Colors.grey.shade300, width: 1.5),
-                  minimumSize: const Size(double.infinity, 56),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-                ),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Image.asset(
-                      'assets/images/google.png', 
-                      height: 24,
-                      errorBuilder: (context, error, stackTrace) => const Text(
-                        'G', 
-                        style: TextStyle(color: Color(0xFF4285F4), fontSize: 24, fontWeight: FontWeight.bold)
-                      ),
-                    ),
-                    const SizedBox(width: 12),
-                    const Text(
-                      'Continue with Google',
-                      style: TextStyle(fontSize: 16, color: Colors.black87, fontWeight: FontWeight.w600),
-                    ),
-                  ],
-                ),
               ),
               const SizedBox(height: 40),
             ],
