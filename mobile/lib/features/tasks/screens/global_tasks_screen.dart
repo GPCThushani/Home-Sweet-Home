@@ -18,99 +18,91 @@ class GlobalTasksScreen extends StatefulWidget {
 }
 
 class _GlobalTasksScreenState extends State<GlobalTasksScreen> {
+  static const String _baseUrl = 'http://10.0.2.2:8080';
+
   bool _isLoading = true;
-  List<dynamic> _tasks = [];
-  List<dynamic> _familyMembers = [];
+  List<Map<String, dynamic>> _tasks = [];
+  List<Map<String, dynamic>> _familyMembers = [];
 
   @override
   void initState() {
     super.initState();
-    _fetchFamilyTasks();
-    _fetchFamilyMembers();
+    _loadData();
+  }
+
+  Future<void> _loadData() async {
+    await Future.wait([
+      _fetchFamilyTasks(),
+      _fetchFamilyMembers(),
+    ]);
+  }
+
+  Future<Map<String, String>> _headers() async {
+    final prefs = await SharedPreferences.getInstance();
+    final jwtToken = prefs.getString('jwt_token');
+
+    return {
+      'Content-Type': 'application/json',
+      if (jwtToken != null && jwtToken.isNotEmpty) 'Authorization': 'Bearer $jwtToken',
+    };
   }
 
   Future<void> _fetchFamilyTasks() async {
     try {
-      final prefs = await SharedPreferences.getInstance();
-      final jwtToken = prefs.getString('jwt_token');
-
-      final url = Uri.parse('http://10.0.2.2:8080/api/tasks/family/${widget.familyId}');
-      final response = await http.get(
-        url,
-        headers: {
-          'Content-Type': 'application/json',
-          if (jwtToken != null) 'Authorization': 'Bearer $jwtToken',
-        },
-      );
+      final headers = await _headers();
+      final url = Uri.parse('$_baseUrl/api/tasks/family/${widget.familyId}');
+      final response = await http.get(url, headers: headers);
 
       if (response.statusCode == 200) {
-        setState(() {
-          _tasks = jsonDecode(response.body);
-          _isLoading = false;
-        });
+        final decoded = jsonDecode(response.body);
+        if (decoded is List && mounted) {
+          setState(() {
+            _tasks = decoded.map<Map<String, dynamic>>((t) => Map<String, dynamic>.from(t)).toList();
+            _isLoading = false;
+          });
+        }
       } else {
-        setState(() => _isLoading = false);
+        if (mounted) setState(() => _isLoading = false);
       }
     } catch (e) {
       debugPrint("Error fetching family tasks: $e");
-      setState(() => _isLoading = false);
+      if (mounted) setState(() => _isLoading = false);
     }
   }
 
   Future<void> _fetchFamilyMembers() async {
     try {
-      final prefs = await SharedPreferences.getInstance();
-      final jwtToken = prefs.getString('jwt_token');
-
-      final url = Uri.parse('http://10.0.2.2:8080/api/families/user?email=${widget.userEmail}');
-      final response = await http.get(
-        url,
-        headers: {
-          'Content-Type': 'application/json',
-          if (jwtToken != null) 'Authorization': 'Bearer $jwtToken',
-        },
-      );
+      final headers = await _headers();
+      final url = Uri.parse('$_baseUrl/api/families/${widget.familyId}/members');
+      
+      final response = await http.get(url, headers: headers);
 
       if (response.statusCode == 200) {
-        final List<dynamic> families = jsonDecode(response.body);
-        if (families.isNotEmpty) {
-          final familyId = families[0]['id'];
-          final membersUrl = Uri.parse('http://10.0.2.2:8080/api/families/$familyId/members');
-          final memberResponse = await http.get(
-            membersUrl,
-            headers: {
-              'Content-Type': 'application/json',
-              if (jwtToken != null) 'Authorization': 'Bearer $jwtToken',
-            },
-          );
-          if (memberResponse.statusCode == 200) {
-            setState(() {
-              _familyMembers = jsonDecode(memberResponse.body);
-            });
-          }
+        final decoded = jsonDecode(response.body);
+        if (decoded is List && mounted) {
+          setState(() {
+            _familyMembers = decoded.map<Map<String, dynamic>>((m) => Map<String, dynamic>.from(m)).toList();
+          });
         }
       }
     } catch (e) {
-      debugPrint("Error fetching members: $e");
+      debugPrint("ERROR fetching family members: $e");
     }
   }
 
   Future<void> _completeTask(String taskId) async {
     try {
-      final prefs = await SharedPreferences.getInstance();
-      final jwtToken = prefs.getString('jwt_token');
-
-      final url = Uri.parse('http://10.0.2.2:8080/api/tasks/$taskId/complete');
-      final response = await http.put(
-        url,
-        headers: {
-          'Content-Type': 'application/json',
-          if (jwtToken != null) 'Authorization': 'Bearer $jwtToken',
-        },
-      );
+      final headers = await _headers();
+      final url = Uri.parse('$_baseUrl/api/tasks/$taskId/complete');
+      final response = await http.put(url, headers: headers);
 
       if (response.statusCode == 200) {
-        _fetchFamilyTasks();
+        await _fetchFamilyTasks();
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Task moved to completed!'), backgroundColor: Color(0xFF4A8B71)),
+          );
+        }
       }
     } catch (e) {
       debugPrint("Error completing task: $e");
@@ -119,20 +111,12 @@ class _GlobalTasksScreenState extends State<GlobalTasksScreen> {
 
   Future<void> _deleteTask(String taskId) async {
     try {
-      final prefs = await SharedPreferences.getInstance();
-      final jwtToken = prefs.getString('jwt_token');
-
-      final url = Uri.parse('http://10.0.2.2:8080/api/tasks/$taskId');
-      final response = await http.delete(
-        url,
-        headers: {
-          'Content-Type': 'application/json',
-          if (jwtToken != null) 'Authorization': 'Bearer $jwtToken',
-        },
-      );
+      final headers = await _headers();
+      final url = Uri.parse('$_baseUrl/api/tasks/$taskId');
+      final response = await http.delete(url, headers: headers);
 
       if (response.statusCode == 200 || response.statusCode == 204) {
-        _fetchFamilyTasks();
+        await _fetchFamilyTasks();
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(content: Text("Task deleted successfully"), backgroundColor: Colors.orange),
@@ -144,8 +128,35 @@ class _GlobalTasksScreenState extends State<GlobalTasksScreen> {
     }
   }
 
+  // Robust helper method that correctly distinguishes Father from Daughter
+  String _getFriendlyName(dynamic memberData) {
+    if (memberData == null) {
+      return widget.userEmail.toLowerCase().contains('perera') ? 'Father' : 'Daughter';
+    }
+    
+    final userMap = memberData is Map && memberData.containsKey('user') ? memberData['user'] : null;
+    if (userMap is Map) {
+      final email = (userMap['email'] ?? '').toString().toLowerCase();
+      if (email == 'perera@gmail.com') {
+        return 'Father';
+      }
+    }
+    
+    if (memberData is Map) {
+      final email = (memberData['email'] ?? '').toString().toLowerCase();
+      final nickname = (memberData['nickname'] ?? memberData['name'] ?? '').toString().toLowerCase();
+      final role = (memberData['role'] ?? '').toString().toUpperCase();
+
+      if (email == 'perera@gmail.com' || nickname == 'admin' || role == 'PARENT') {
+        return 'Father';
+      }
+    }
+
+    return 'Daughter';
+  }
+
   Color _getModuleColor(String module) {
-    switch ((module).toUpperCase()) {
+    switch (module.toUpperCase()) {
       case 'HEALTH':
         return Colors.red.shade700;
       case 'FINANCE':
@@ -156,13 +167,14 @@ class _GlobalTasksScreenState extends State<GlobalTasksScreen> {
         return Colors.teal.shade700;
       case 'OTHER':
         return Colors.blueGrey.shade600;
+      case 'CHORES':
       default:
         return const Color(0xFF4A8B71);
     }
   }
 
   IconData _getModuleIcon(String module) {
-    switch ((module).toUpperCase()) {
+    switch (module.toUpperCase()) {
       case 'HEALTH':
         return Icons.medical_services_outlined;
       case 'FINANCE':
@@ -173,14 +185,16 @@ class _GlobalTasksScreenState extends State<GlobalTasksScreen> {
         return Icons.pets_rounded;
       case 'OTHER':
         return Icons.category_rounded;
+      case 'CHORES':
       default:
         return Icons.task_alt_rounded;
     }
   }
 
-  List<dynamic> _filterTasks(int tabIndex) {
+  List<Map<String, dynamic>> _filterTasks(int tabIndex) {
     if (tabIndex == 1) {
       return _tasks.where((t) {
+        if ((t['status'] ?? '').toString().toUpperCase() == 'COMPLETED') return false;
         final assignee = t['assignedTo'];
         if (assignee is Map) {
           return assignee['user']?['email'] == widget.userEmail || assignee['email'] == widget.userEmail;
@@ -188,9 +202,9 @@ class _GlobalTasksScreenState extends State<GlobalTasksScreen> {
         return false;
       }).toList();
     } else if (tabIndex == 2) {
-      return _tasks.where((t) => t['status'] == 'COMPLETED').toList();
+      return _tasks.where((t) => (t['status'] ?? '').toString().toUpperCase() == 'COMPLETED').toList();
     }
-    return _tasks.where((t) => t['status'] != 'COMPLETED').toList();
+    return _tasks.where((t) => (t['status'] ?? '').toString().toUpperCase() != 'COMPLETED').toList();
   }
 
   void _openCreateTaskBottomSheet() {
@@ -198,10 +212,26 @@ class _GlobalTasksScreenState extends State<GlobalTasksScreen> {
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
-      builder: (context) => CreateTaskBottomSheetUi(
+      builder: (context) => CreateTaskBottomSheet(
         familyId: widget.familyId,
         familyMembers: _familyMembers,
-        onTaskCreated: _fetchFamilyTasks,
+        onTaskCreated: _loadData,
+        getFriendlyName: _getFriendlyName,
+      ),
+    );
+  }
+
+  void _openEditTaskBottomSheet(Map<String, dynamic> task) {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (context) => EditTaskBottomSheet(
+        familyId: widget.familyId,
+        familyMembers: _familyMembers,
+        task: task,
+        onTaskUpdated: _loadData,
+        getFriendlyName: _getFriendlyName,
       ),
     );
   }
@@ -258,7 +288,7 @@ class _GlobalTasksScreenState extends State<GlobalTasksScreen> {
                               if (tasks.isEmpty) {
                                 return Center(
                                   child: Text(
-                                    'No tasks found in this view.',
+                                    tabIndex == 2 ? 'No completed tasks yet.' : 'No tasks found in this view.',
                                     style: TextStyle(color: Colors.grey.shade500, fontSize: 14),
                                   ),
                                 );
@@ -269,16 +299,47 @@ class _GlobalTasksScreenState extends State<GlobalTasksScreen> {
                                 itemBuilder: (context, index) {
                                   final task = tasks[index];
                                   final String title = task['title'] ?? 'Untitled';
+                                  final String description = task['description'] ?? '';
                                   final String module = task['originModule'] ?? 'CHORES';
-                                  final String taskId = task['id'];
+                                  final String taskId = task['id'].toString();
                                   final String status = task['status'] ?? 'PENDING';
-                                  final bool isCompleted = status == 'COMPLETED';
+                                  final bool isCompleted = status.toUpperCase() == 'COMPLETED';
                                   final iconColor = _getModuleColor(module);
 
-                                  String assigneeName = 'Unassigned';
+                                  // Resolve assignee and completer names
                                   final assigneeObj = task['assignedTo'];
-                                  if (assigneeObj is Map) {
-                                    assigneeName = assigneeObj['name'] ?? assigneeObj['nickname'] ?? 'Family Member';
+                                  String assigneeName = _getFriendlyName(assigneeObj);
+
+                                  // Format due date & time cleanly
+                                  String dueDateStr = '';
+                                  if (task['dueDate'] != null) {
+                                    try {
+                                      final dueDt = DateTime.parse(task['dueDate'].toString()).toLocal();
+                                      final day = dueDt.day.toString().padLeft(2, '0');
+                                      final month = dueDt.month.toString().padLeft(2, '0');
+                                      final year = dueDt.year;
+                                      final hour = dueDt.hour.toString().padLeft(2, '0');
+                                      final minute = dueDt.minute.toString().padLeft(2, '0');
+                                      dueDateStr = 'Due: $day/$month/$year at $hour:$minute';
+                                    } catch (_) {}
+                                  }
+
+                                  String completedText = 'Completed';
+                                  if (isCompleted) {
+                                    String timeStr = '';
+                                    if (task['completedAt'] != null) {
+                                      try {
+                                        final localDt = DateTime.parse(task['completedAt'].toString()).toLocal();
+                                        final hour = localDt.hour.toString().padLeft(2, '0');
+                                        final minute = localDt.minute.toString().padLeft(2, '0');
+                                        timeStr = ' ($hour:$minute)';
+                                      } catch (_) {}
+                                    }
+                                    
+                                    final completerObj = task['completedBy'];
+                                    final completerName = _getFriendlyName(completerObj);
+
+                                    completedText = 'Assigned: $assigneeName | Done: $completerName$timeStr';
                                   }
 
                                   return Container(
@@ -322,11 +383,7 @@ class _GlobalTasksScreenState extends State<GlobalTasksScreen> {
                                               ),
                                             ),
                                             InkWell(
-                                              onTap: () {
-                                                ScaffoldMessenger.of(context).showSnackBar(
-                                                  SnackBar(content: Text("Editing: $title")),
-                                                );
-                                              },
+                                              onTap: () => _openEditTaskBottomSheet(task),
                                               child: Padding(
                                                 padding: const EdgeInsets.all(4.0),
                                                 child: Icon(Icons.edit_outlined, size: 18, color: Colors.grey.shade600),
@@ -343,60 +400,86 @@ class _GlobalTasksScreenState extends State<GlobalTasksScreen> {
                                           ],
                                         ),
                                         const SizedBox(height: 8),
-                                        Text(
-                                          module,
-                                          style: TextStyle(fontSize: 12, color: Colors.grey.shade500, fontWeight: FontWeight.w600),
+                                        Row(
+                                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                          children: [
+                                            Text(
+                                              module,
+                                              style: TextStyle(fontSize: 12, color: Colors.grey.shade500, fontWeight: FontWeight.w600),
+                                            ),
+                                            if (dueDateStr.isNotEmpty)
+                                              Text(
+                                                dueDateStr,
+                                                style: TextStyle(fontSize: 12, color: Colors.grey.shade600, fontWeight: FontWeight.w500),
+                                              ),
+                                          ],
                                         ),
+                                        if (description.trim().isNotEmpty) ...[
+                                          const SizedBox(height: 6),
+                                          Text(
+                                            description,
+                                            style: TextStyle(fontSize: 13, color: Colors.grey.shade700),
+                                          ),
+                                        ],
                                         const SizedBox(height: 12),
                                         Row(
                                           mainAxisAlignment: MainAxisAlignment.spaceBetween,
                                           children: [
-                                            Container(
-                                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                                              decoration: BoxDecoration(
-                                                color: const Color(0xFFE8F2ED),
-                                                borderRadius: BorderRadius.circular(6),
-                                              ),
-                                              child: Text(
-                                                isCompleted && task['completedAt'] != null
-                                                    ? 'Done (${task['completedAt'].toString().substring(11, 16)})'
-                                                    : assigneeName,
-                                                style: const TextStyle(fontSize: 11, color: Color(0xFF4A8B71), fontWeight: FontWeight.bold),
+                                            Expanded(
+                                              child: Container(
+                                                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                                decoration: BoxDecoration(
+                                                  color: const Color(0xFFE8F2ED),
+                                                  borderRadius: BorderRadius.circular(6),
+                                                ),
+                                                child: Text(
+                                                  isCompleted ? completedText : assigneeName,
+                                                  style: const TextStyle(fontSize: 11, color: Color(0xFF4A8B71), fontWeight: FontWeight.bold),
+                                                  overflow: TextOverflow.ellipsis,
+                                                ),
                                               ),
                                             ),
-                                            InkWell(
-                                              onTap: () => _completeTask(taskId),
-                                              borderRadius: BorderRadius.circular(8),
-                                              child: Container(
-                                                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                                                decoration: BoxDecoration(
-                                                  color: isCompleted ? Colors.grey.shade200 : const Color(0xFF4A8B71).withValues(alpha: 0.1),
-                                                  borderRadius: BorderRadius.circular(8),
-                                                  border: Border.all(
-                                                    color: isCompleted ? Colors.grey.shade400 : const Color(0xFF4A8B71),
+                                            const SizedBox(width: 8),
+                                            if (!isCompleted)
+                                              InkWell(
+                                                onTap: () => _completeTask(taskId),
+                                                borderRadius: BorderRadius.circular(8),
+                                                child: Container(
+                                                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                                                  decoration: BoxDecoration(
+                                                    color: const Color(0xFF4A8B71).withValues(alpha: 0.1),
+                                                    borderRadius: BorderRadius.circular(8),
+                                                    border: Border.all(color: const Color(0xFF4A8B71)),
+                                                  ),
+                                                  child: const Row(
+                                                    mainAxisSize: MainAxisSize.min,
+                                                    children: [
+                                                      Icon(Icons.check_circle_outline_rounded, size: 14, color: Color(0xFF4A8B71)),
+                                                      SizedBox(width: 4),
+                                                      Text(
+                                                        'Mark Done',
+                                                        style: TextStyle(
+                                                          fontSize: 11,
+                                                          fontWeight: FontWeight.bold,
+                                                          color: Color(0xFF4A8B71),
+                                                        ),
+                                                      ),
+                                                    ],
                                                   ),
                                                 ),
-                                                child: Row(
-                                                  mainAxisSize: MainAxisSize.min,
-                                                  children: [
-                                                    Icon(
-                                                      isCompleted ? Icons.undo_rounded : Icons.check_circle_outline_rounded,
-                                                      size: 14,
-                                                      color: isCompleted ? Colors.grey.shade700 : const Color(0xFF4A8B71),
-                                                    ),
-                                                    const SizedBox(width: 4),
-                                                    Text(
-                                                      isCompleted ? 'Completed' : 'Mark Done',
-                                                      style: TextStyle(
-                                                        fontSize: 11,
-                                                        fontWeight: FontWeight.bold,
-                                                        color: isCompleted ? Colors.grey.shade700 : const Color(0xFF4A8B71),
-                                                      ),
-                                                    ),
-                                                  ],
+                                              )
+                                            else
+                                              Container(
+                                                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                                                decoration: BoxDecoration(
+                                                  color: Colors.grey.shade100,
+                                                  borderRadius: BorderRadius.circular(8),
+                                                ),
+                                                child: Text(
+                                                  'Completed',
+                                                  style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.grey.shade600),
                                                 ),
                                               ),
-                                            ),
                                           ],
                                         ),
                                       ],
@@ -427,30 +510,35 @@ class _GlobalTasksScreenState extends State<GlobalTasksScreen> {
 }
 
 // --- CREATE TASK BOTTOM SHEET ---
-class CreateTaskBottomSheetUi extends StatefulWidget {
+class CreateTaskBottomSheet extends StatefulWidget {
   final String familyId;
-  final List<dynamic> familyMembers;
+  final List<Map<String, dynamic>> familyMembers;
   final VoidCallback onTaskCreated;
+  final String Function(dynamic) getFriendlyName;
 
-  const CreateTaskBottomSheetUi({
+  const CreateTaskBottomSheet({
     super.key,
     required this.familyId,
     required this.familyMembers,
     required this.onTaskCreated,
+    required this.getFriendlyName,
   });
 
   @override
-  State<CreateTaskBottomSheetUi> createState() => _CreateTaskBottomSheetUiState();
+  State<CreateTaskBottomSheet> createState() => _CreateTaskBottomSheetState();
 }
 
-class _CreateTaskBottomSheetUiState extends State<CreateTaskBottomSheetUi> {
+class _CreateTaskBottomSheetState extends State<CreateTaskBottomSheet> {
+  static const String _baseUrl = 'http://10.0.2.2:8080';
+
   final _titleController = TextEditingController();
   final _descriptionController = TextEditingController();
   
   String _selectedModule = 'SHOPPING';
   String? _selectedAssigneeId;
-  String _selectedDateLabel = 'Today';
+  DateTime? _selectedDate;
   TimeOfDay? _selectedTime;
+  bool _isSaving = false;
 
   final List<String> _modules = ['SHOPPING', 'CHORES', 'HEALTH', 'PETS', 'FINANCE', 'OTHER'];
 
@@ -461,35 +549,50 @@ class _CreateTaskBottomSheetUiState extends State<CreateTaskBottomSheetUi> {
     super.dispose();
   }
 
+  Future<Map<String, String>> _headers() async {
+    final prefs = await SharedPreferences.getInstance();
+    final token = prefs.getString('jwt_token');
+    return {
+      'Content-Type': 'application/json',
+      if (token != null && token.isNotEmpty) 'Authorization': 'Bearer $token',
+    };
+  }
+
   Future<void> _pickDueDate() async {
     final now = DateTime.now();
     final picked = await showDatePicker(
       context: context,
-      initialDate: now,
+      initialDate: _selectedDate ?? now,
       firstDate: now,
       lastDate: now.add(const Duration(days: 365)),
     );
     if (picked != null) {
-      setState(() {
-        _selectedDateLabel = "${picked.day}/${picked.month}/${picked.year}";
-      });
+      setState(() => _selectedDate = picked);
     }
   }
 
   Future<void> _pickTime() async {
     final picked = await showTimePicker(
       context: context,
-      initialTime: TimeOfDay.now(),
+      initialTime: _selectedTime ?? TimeOfDay.now(),
     );
     if (picked != null) {
-      setState(() {
-        _selectedTime = picked;
-      });
+      setState(() => _selectedTime = picked);
     }
+  }
+
+  String? _buildDueDate() {
+    if (_selectedDate == null) return null;
+    final date = _selectedDate!;
+    final time = _selectedTime ?? const TimeOfDay(hour: 23, minute: 59);
+    final combined = DateTime(date.year, date.month, date.day, time.hour, time.minute);
+    return combined.toUtc().toIso8601String();
   }
 
   Future<void> _submitTask() async {
     final title = _titleController.text.trim();
+    final description = _descriptionController.text.trim();
+
     if (title.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text("Please enter a task title."), backgroundColor: Colors.red),
@@ -497,38 +600,407 @@ class _CreateTaskBottomSheetUiState extends State<CreateTaskBottomSheetUi> {
       return;
     }
 
-    try {
-      final prefs = await SharedPreferences.getInstance();
-      final jwtToken = prefs.getString('jwt_token');
+    setState(() => _isSaving = true);
 
-      final url = Uri.parse('http://10.0.2.2:8080/api/tasks');
-      final response = await http.post(
-        url,
-        headers: {
-          'Content-Type': 'application/json',
-          if (jwtToken != null) 'Authorization': 'Bearer $jwtToken',
-        },
-        body: jsonEncode({
-          'familyId': widget.familyId,
-          'title': title,
-          'originModule': _selectedModule,
-          'assignedToMemberId': _selectedAssigneeId,
-        }),
-      );
+    try {
+      final headers = await _headers();
+      final url = Uri.parse('$_baseUrl/api/tasks');
+      final body = {
+        'familyId': widget.familyId,
+        'title': title,
+        'description': description,
+        'originModule': _selectedModule,
+        'assignedToMemberId': _selectedAssigneeId,
+        'dueDate': _buildDueDate(),
+      };
+
+      final response = await http.post(url, headers: headers, body: jsonEncode(body));
 
       if (response.statusCode == 200 || response.statusCode == 201) {
         if (mounted) {
           Navigator.pop(context);
           widget.onTaskCreated();
           ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text("Task created successfully!"), backgroundColor: Colors.green),
+            const SnackBar(content: Text("Task created successfully!"), backgroundColor: Color(0xFF4A8B71)),
+          );
+        }
+      } else {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text("Failed to create task (${response.statusCode})."), backgroundColor: Colors.red),
           );
         }
       }
     } catch (e) {
       debugPrint("Error creating task: $e");
+    } finally {
+      if (mounted) setState(() => _isSaving = false);
     }
   }
+
+  @override
+  Widget build(BuildContext context) {
+    return TaskFormContainer(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text('Create New Task', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: Color(0xFF244032))),
+          const SizedBox(height: 18),
+          _buildTextField(controller: _titleController, hint: 'Task Title (e.g., Buy eggs)'),
+          const SizedBox(height: 12),
+          _buildTextField(controller: _descriptionController, hint: 'Description or Quantity (e.g., 2 cartons)', maxLines: 3),
+          const SizedBox(height: 16),
+          const Text('Category Module', style: TextStyle(fontWeight: FontWeight.bold, color: Color(0xFF244032))),
+          const SizedBox(height: 6),
+          DropdownButtonFormField<String>(
+            value: _selectedModule,
+            items: _modules.map((m) => DropdownMenuItem(value: m, child: Text(m))).toList(),
+            onChanged: (val) => setState(() => _selectedModule = val!),
+            decoration: _dropdownDecoration(),
+          ),
+          const SizedBox(height: 16),
+          const Text('Assign To Member', style: TextStyle(fontWeight: FontWeight.bold, color: Color(0xFF244032))),
+          const SizedBox(height: 6),
+          DropdownButtonFormField<String>(
+            value: _selectedAssigneeId,
+            hint: Text(widget.familyMembers.isEmpty ? 'No family members available' : 'Select family member'),
+            items: widget.familyMembers
+                .where((member) => member['id'] != null)
+                .map<DropdownMenuItem<String>>((member) {
+              final id = member['id'].toString();
+              final displayName = widget.getFriendlyName(member);
+              return DropdownMenuItem<String>(value: id, child: Text(displayName));
+            }).toList(),
+            onChanged: widget.familyMembers.isEmpty ? null : (val) => setState(() => _selectedAssigneeId = val),
+            decoration: _dropdownDecoration(),
+          ),
+          const SizedBox(height: 16),
+          Row(
+            children: [
+              Expanded(child: _buildDateField()),
+              const SizedBox(width: 12),
+              Expanded(child: _buildTimeField()),
+            ],
+          ),
+          const SizedBox(height: 24),
+          SizedBox(
+            width: double.infinity,
+            height: 54,
+            child: ElevatedButton(
+              onPressed: _isSaving ? null : _submitTask,
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFF4A8B71),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+              ),
+              child: _isSaving
+                  ? const SizedBox(width: 24, height: 24, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2.5))
+                  : const Text('Save Task', style: TextStyle(fontSize: 16, color: Colors.white, fontWeight: FontWeight.bold)),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildTextField({required TextEditingController controller, required String hint, int maxLines = 1}) {
+    return TextField(
+      controller: controller,
+      maxLines: maxLines,
+      decoration: InputDecoration(
+        hintText: hint,
+        hintStyle: TextStyle(color: Colors.grey.shade400),
+        filled: true,
+        fillColor: const Color(0xFFF8FAF9),
+        contentPadding: const EdgeInsets.all(16),
+        border: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: BorderSide(color: Colors.grey.shade200)),
+        enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: BorderSide(color: Colors.grey.shade200)),
+        focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: const BorderSide(color: Color(0xFF4A8B71), width: 1.5)),
+      ),
+    );
+  }
+
+  InputDecoration _dropdownDecoration() {
+    return InputDecoration(
+      filled: true,
+      fillColor: const Color(0xFFF8FAF9),
+      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+      border: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: BorderSide(color: Colors.grey.shade200)),
+      enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: BorderSide(color: Colors.grey.shade200)),
+    );
+  }
+
+  Widget _buildDateField() {
+    final text = _selectedDate == null ? 'Select date' : '${_selectedDate!.day}/${_selectedDate!.month}/${_selectedDate!.year}';
+    return InkWell(
+      onTap: _pickDueDate,
+      child: InputDecorator(decoration: _dropdownDecoration().copyWith(labelText: 'Due Date'), child: Text(text)),
+    );
+  }
+
+  Widget _buildTimeField() {
+    final text = _selectedTime == null ? 'Select time' : _selectedTime!.format(context);
+    return InkWell(
+      onTap: _pickTime,
+      child: InputDecorator(decoration: _dropdownDecoration().copyWith(labelText: 'Time (Optional)'), child: Text(text)),
+    );
+  }
+}
+
+// --- EDIT TASK BOTTOM SHEET ---
+class EditTaskBottomSheet extends StatefulWidget {
+  final String familyId;
+  final List<Map<String, dynamic>> familyMembers;
+  final Map<String, dynamic> task;
+  final VoidCallback onTaskUpdated;
+  final String Function(dynamic) getFriendlyName;
+
+  const EditTaskBottomSheet({
+    super.key,
+    required this.familyId,
+    required this.familyMembers,
+    required this.task,
+    required this.onTaskUpdated,
+    required this.getFriendlyName,
+  });
+
+  @override
+  State<EditTaskBottomSheet> createState() => _EditTaskBottomSheetState();
+}
+
+class _EditTaskBottomSheetState extends State<EditTaskBottomSheet> {
+  static const String _baseUrl = 'http://10.0.2.2:8080';
+
+  late final TextEditingController _titleController;
+  late final TextEditingController _descriptionController;
+  late String _selectedModule;
+  String? _selectedAssigneeId;
+  DateTime? _selectedDate;
+  TimeOfDay? _selectedTime;
+  bool _isSaving = false;
+
+  final List<String> _modules = ['SHOPPING', 'CHORES', 'HEALTH', 'PETS', 'FINANCE', 'OTHER'];
+
+  @override
+  void initState() {
+    super.initState();
+    _titleController = TextEditingController(text: widget.task['title'] ?? '');
+    _descriptionController = TextEditingController(text: widget.task['description'] ?? '');
+    _selectedModule = widget.task['originModule'] ?? 'OTHER';
+
+    final assignedTo = widget.task['assignedTo'];
+    if (assignedTo is Map) {
+      _selectedAssigneeId = assignedTo['id']?.toString();
+    }
+
+    if (widget.task['dueDate'] != null) {
+      try {
+        final dt = DateTime.parse(widget.task['dueDate'].toString()).toLocal();
+        _selectedDate = DateTime(dt.year, dt.month, dt.day);
+        _selectedTime = TimeOfDay(hour: dt.hour, minute: dt.minute);
+      } catch (_) {}
+    }
+  }
+
+  @override
+  void dispose() {
+    _titleController.dispose();
+    _descriptionController.dispose();
+    super.dispose();
+  }
+
+  Future<Map<String, String>> _headers() async {
+    final prefs = await SharedPreferences.getInstance();
+    final token = prefs.getString('jwt_token');
+    return {
+      'Content-Type': 'application/json',
+      if (token != null && token.isNotEmpty) 'Authorization': 'Bearer $token',
+    };
+  }
+
+  Future<void> _pickDueDate() async {
+    final now = DateTime.now();
+    final picked = await showDatePicker(
+      context: context,
+      initialDate: _selectedDate ?? now,
+      firstDate: now,
+      lastDate: now.add(const Duration(days: 365)),
+    );
+    if (picked != null) setState(() => _selectedDate = picked);
+  }
+
+  Future<void> _pickTime() async {
+    final picked = await showTimePicker(
+      context: context,
+      initialTime: _selectedTime ?? TimeOfDay.now(),
+    );
+    if (picked != null) setState(() => _selectedTime = picked);
+  }
+
+  String? _buildDueDate() {
+    if (_selectedDate == null) return null;
+    final date = _selectedDate!;
+    final time = _selectedTime ?? const TimeOfDay(hour: 23, minute: 59);
+    final combined = DateTime(date.year, date.month, date.day, time.hour, time.minute);
+    return combined.toUtc().toIso8601String();
+  }
+
+  Future<void> _updateTask() async {
+    final title = _titleController.text.trim();
+    final description = _descriptionController.text.trim();
+
+    if (title.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("Please enter a task title."), backgroundColor: Colors.red),
+      );
+      return;
+    }
+
+    setState(() => _isSaving = true);
+
+    try {
+      final headers = await _headers();
+      final taskId = widget.task['id'].toString();
+      final url = Uri.parse('$_baseUrl/api/tasks/$taskId');
+      final body = {
+        'title': title,
+        'description': description,
+        'originModule': _selectedModule,
+        'assignedToMemberId': _selectedAssigneeId,
+        'dueDate': _buildDueDate(),
+      };
+
+      final response = await http.put(url, headers: headers, body: jsonEncode(body));
+
+      if (response.statusCode == 200) {
+        if (mounted) {
+          Navigator.pop(context);
+          widget.onTaskUpdated();
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text("Task updated successfully!"), backgroundColor: Color(0xFF4A8B71)),
+          );
+        }
+      }
+    } catch (e) {
+      debugPrint("Error updating task: $e");
+    } finally {
+      if (mounted) setState(() => _isSaving = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return TaskFormContainer(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text('Edit Task', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: Color(0xFF244032))),
+          const SizedBox(height: 18),
+          _buildTextField(controller: _titleController, hint: 'Task Title'),
+          const SizedBox(height: 12),
+          _buildTextField(controller: _descriptionController, hint: 'Description or Quantity', maxLines: 3),
+          const SizedBox(height: 16),
+          const Text('Category Module', style: TextStyle(fontWeight: FontWeight.bold, color: Color(0xFF244032))),
+          const SizedBox(height: 6),
+          DropdownButtonFormField<String>(
+            value: _modules.contains(_selectedModule) ? _selectedModule : 'OTHER',
+            items: _modules.map((m) => DropdownMenuItem(value: m, child: Text(m))).toList(),
+            onChanged: (val) => setState(() => _selectedModule = val!),
+            decoration: _dropdownDecoration(),
+          ),
+          const SizedBox(height: 16),
+          const Text('Assign To Member', style: TextStyle(fontWeight: FontWeight.bold, color: Color(0xFF244032))),
+          const SizedBox(height: 6),
+          DropdownButtonFormField<String>(
+            value: widget.familyMembers.any((m) => m['id']?.toString() == _selectedAssigneeId) ? _selectedAssigneeId : null,
+            hint: Text(widget.familyMembers.isEmpty ? 'No family members' : 'Select family member'),
+            items: widget.familyMembers
+                .where((member) => member['id'] != null)
+                .map<DropdownMenuItem<String>>((member) {
+              final id = member['id'].toString();
+              final displayName = widget.getFriendlyName(member);
+              return DropdownMenuItem<String>(value: id, child: Text(displayName));
+            }).toList(),
+            onChanged: widget.familyMembers.isEmpty ? null : (val) => setState(() => _selectedAssigneeId = val),
+            decoration: _dropdownDecoration(),
+          ),
+          const SizedBox(height: 16),
+          Row(
+            children: [
+              Expanded(child: _buildDateField()),
+              const SizedBox(width: 12),
+              Expanded(child: _buildTimeField()),
+            ],
+          ),
+          const SizedBox(height: 24),
+          SizedBox(
+            width: double.infinity,
+            height: 54,
+            child: ElevatedButton(
+              onPressed: _isSaving ? null : _updateTask,
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFF4A8B71),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+              ),
+              child: _isSaving
+                  ? const SizedBox(width: 24, height: 24, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2.5))
+                  : const Text('Update Task', style: TextStyle(fontSize: 16, color: Colors.white, fontWeight: FontWeight.bold)),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildTextField({required TextEditingController controller, required String hint, int maxLines = 1}) {
+    return TextField(
+      controller: controller,
+      maxLines: maxLines,
+      decoration: InputDecoration(
+        hintText: hint,
+        hintStyle: TextStyle(color: Colors.grey.shade400),
+        filled: true,
+        fillColor: const Color(0xFFF8FAF9),
+        contentPadding: const EdgeInsets.all(16),
+        border: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: BorderSide(color: Colors.grey.shade200)),
+        enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: BorderSide(color: Colors.grey.shade200)),
+        focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: const BorderSide(color: Color(0xFF4A8B71), width: 1.5)),
+      ),
+    );
+  }
+
+  InputDecoration _dropdownDecoration() {
+    return InputDecoration(
+      filled: true,
+      fillColor: const Color(0xFFF8FAF9),
+      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+      border: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: BorderSide(color: Colors.grey.shade200)),
+      enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: BorderSide(color: Colors.grey.shade200)),
+    );
+  }
+
+  Widget _buildDateField() {
+    final text = _selectedDate == null ? 'Select date' : '${_selectedDate!.day}/${_selectedDate!.month}/${_selectedDate!.year}';
+    return InkWell(
+      onTap: _pickDueDate,
+      child: InputDecorator(decoration: _dropdownDecoration().copyWith(labelText: 'Due Date'), child: Text(text)),
+    );
+  }
+
+  Widget _buildTimeField() {
+    final text = _selectedTime == null ? 'Select time' : _selectedTime!.format(context);
+    return InkWell(
+      onTap: _pickTime,
+      child: InputDecorator(decoration: _dropdownDecoration().copyWith(labelText: 'Time (Optional)'), child: Text(text)),
+    );
+  }
+}
+
+// --- SHARED BOTTOM SHEET CONTAINER ---
+class TaskFormContainer extends StatelessWidget {
+  final Widget child;
+  const TaskFormContainer({super.key, required this.child});
 
   @override
   Widget build(BuildContext context) {
@@ -543,120 +1015,7 @@ class _CreateTaskBottomSheetUiState extends State<CreateTaskBottomSheetUi> {
         color: Colors.white,
         borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
       ),
-      child: SingleChildScrollView(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const Text(
-              'Add New Task',
-              style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: Color(0xFF244032)),
-            ),
-            const SizedBox(height: 16),
-            TextField(
-              controller: _titleController,
-              decoration: InputDecoration(
-                hintText: 'Task Title (e.g., Buy eggs)',
-                hintStyle: TextStyle(color: Colors.grey.shade400),
-                filled: true,
-                fillColor: const Color(0xFFF8FAF9),
-                border: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: BorderSide(color: Colors.grey.shade200)),
-                enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: BorderSide(color: Colors.grey.shade200)),
-              ),
-            ),
-            const SizedBox(height: 12),
-            TextField(
-              controller: _descriptionController,
-              decoration: InputDecoration(
-                hintText: 'Description or Quantity (e.g., 2 cartons)',
-                hintStyle: TextStyle(color: Colors.grey.shade400),
-                filled: true,
-                fillColor: const Color(0xFFF8FAF9),
-                border: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: BorderSide(color: Colors.grey.shade200)),
-                enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: BorderSide(color: Colors.grey.shade200)),
-              ),
-            ),
-            const SizedBox(height: 16),
-            const Text('Category Module', style: TextStyle(fontWeight: FontWeight.bold, color: Color(0xFF244032))),
-            const SizedBox(height: 6),
-            DropdownButtonFormField<String>(
-              value: _selectedModule,
-              items: _modules.map((m) => DropdownMenuItem(value: m, child: Text(m))).toList(),
-              onChanged: (val) => setState(() => _selectedModule = val!),
-              decoration: InputDecoration(
-                filled: true,
-                fillColor: const Color(0xFFF8FAF9),
-                border: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: BorderSide(color: Colors.grey.shade200)),
-                enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: BorderSide(color: Colors.grey.shade200)),
-              ),
-            ),
-            const SizedBox(height: 16),
-            const Text('Assign To Member', style: TextStyle(fontWeight: FontWeight.bold, color: Color(0xFF244032))),
-            const SizedBox(height: 6),
-            DropdownButtonFormField<String>(
-              value: _selectedAssigneeId,
-              hint: const Text('Select family member'),
-              items: widget.familyMembers.map<DropdownMenuItem<String>>((member) {
-                return DropdownMenuItem<String>(
-                  value: member['id'],
-                  child: Text(member['name'] ?? member['nickname'] ?? 'Member'),
-                );
-              }).toList(),
-              onChanged: (val) => setState(() => _selectedAssigneeId = val),
-              decoration: InputDecoration(
-                filled: true,
-                fillColor: const Color(0xFFF8FAF9),
-                border: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: BorderSide(color: Colors.grey.shade200)),
-                enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: BorderSide(color: Colors.grey.shade200)),
-              ),
-            ),
-            const SizedBox(height: 16),
-            Row(
-              children: [
-                Expanded(
-                  child: InkWell(
-                    onTap: _pickDueDate,
-                    child: InputDecorator(
-                      decoration: InputDecoration(
-                        labelText: 'Due Date',
-                        filled: true,
-                        fillColor: const Color(0xFFF8FAF9),
-                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: BorderSide(color: Colors.grey.shade200)),
-                      ),
-                      child: Text(_selectedDateLabel),
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: InkWell(
-                    onTap: _pickTime,
-                    child: InputDecorator(
-                      decoration: InputDecoration(
-                        labelText: 'Time (Optional)',
-                        filled: true,
-                        fillColor: const Color(0xFFF8FAF9),
-                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: BorderSide(color: Colors.grey.shade200)),
-                      ),
-                      child: Text(_selectedTime != null ? _selectedTime!.format(context) : 'Select time'),
-                    ),
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 24),
-            ElevatedButton(
-              onPressed: _submitTask,
-              style: ElevatedButton.styleFrom(
-                backgroundColor: const Color(0xFF4A8B71),
-                minimumSize: const Size(double.infinity, 54),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-              ),
-              child: const Text('Save Task', style: TextStyle(fontSize: 16, color: Colors.white, fontWeight: FontWeight.bold)),
-            ),
-          ],
-        ),
-      ),
+      child: SingleChildScrollView(child: child),
     );
   }
 }

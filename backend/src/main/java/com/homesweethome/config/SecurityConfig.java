@@ -24,7 +24,7 @@ public class SecurityConfig {
             .csrf(csrf -> csrf.disable())
             .authorizeHttpRequests(auth -> auth
                 .requestMatchers("/api/users/**", "/error").permitAll() 
-                .requestMatchers("/api/families/**").authenticated() // Enforces JWT token validation
+                .requestMatchers("/api/families/**", "/api/tasks/**").authenticated() // <-- ADD /api/tasks/** HERE
                 .anyRequest().authenticated()
             )
             .sessionManagement(session -> session

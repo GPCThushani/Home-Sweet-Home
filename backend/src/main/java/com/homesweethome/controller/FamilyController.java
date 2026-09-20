@@ -5,6 +5,7 @@ import com.homesweethome.dto.JoinFamilyRequest;
 import com.homesweethome.entity.Family;
 import com.homesweethome.entity.FamilyMember;
 import com.homesweethome.entity.User;
+import com.homesweethome.repository.FamilyMemberRepository;
 import com.homesweethome.repository.UserRepository;
 import com.homesweethome.service.FamilyService;
 import lombok.RequiredArgsConstructor;
@@ -22,11 +23,25 @@ public class FamilyController {
 
     private final FamilyService familyService;
     private final UserRepository userRepository;
+    private final FamilyMemberRepository familyMemberRepository;
 
     @GetMapping("/user")
     public ResponseEntity<List<Family>> getFamiliesByUserEmail(@RequestParam String email) {
         List<Family> families = familyService.getFamiliesByUserEmail(email);
         return ResponseEntity.ok(families);
+    }
+
+    // FIX: This endpoint was returning 404 because it was missing from the controller controller mapping
+    @GetMapping("/{familyId}/members")
+    public ResponseEntity<List<FamilyMember>> getFamilyMembers(@PathVariable UUID familyId) {
+        List<FamilyMember> members = familyMemberRepository.findByFamilyId(familyId);
+        return ResponseEntity.ok(members);
+    }
+
+    @GetMapping("/{familyId}/members/logged")
+    public ResponseEntity<List<FamilyMember>> getLoggedFamilyMembers(@PathVariable UUID familyId) {
+        List<FamilyMember> members = familyMemberRepository.findByFamilyIdAndUserIsNotNull(familyId);
+        return ResponseEntity.ok(members);
     }
 
     @PostMapping
@@ -60,7 +75,6 @@ public class FamilyController {
         return ResponseEntity.ok(member);
     }
 
-    // NEW: Join family via invite code endpoint
     @PostMapping("/join-by-code")
     public ResponseEntity<?> joinFamilyByCode(@RequestBody Map<String, String> request) {
         try {

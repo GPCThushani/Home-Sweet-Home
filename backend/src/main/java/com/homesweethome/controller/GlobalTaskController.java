@@ -1,6 +1,7 @@
 package com.homesweethome.controller;
 
 import com.homesweethome.dto.CreateTaskRequest;
+import com.homesweethome.dto.UpdateTaskRequest;
 import com.homesweethome.entity.Family;
 import com.homesweethome.entity.FamilyMember;
 import com.homesweethome.entity.GlobalTask;
@@ -10,6 +11,7 @@ import com.homesweethome.repository.FamilyRepository;
 import com.homesweethome.repository.UserRepository;
 import com.homesweethome.service.GlobalTaskService;
 import lombok.RequiredArgsConstructor;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
@@ -27,19 +29,16 @@ public class GlobalTaskController {
     private final FamilyMemberRepository familyMemberRepository;
     private final UserRepository userRepository;
 
-    // 1. Create a new task
     @PostMapping
     public ResponseEntity<GlobalTask> createTask(@RequestBody CreateTaskRequest request, Authentication authentication) {
         Family family = familyRepository.findById(request.familyId())
                 .orElseThrow(() -> new IllegalArgumentException("Family not found"));
                 
         FamilyMember creator = null;
-        
         if (request.creatorMemberId() != null) {
             creator = familyMemberRepository.findById(request.creatorMemberId()).orElse(null);
         }
 
-        // Fallback: If creatorMemberId wasn't provided or found, look up via authenticated user email
         if (creator == null && authentication != null) {
             String email = authentication.getName();
             User user = userRepository.findByEmail(email).orElse(null);
@@ -48,7 +47,6 @@ public class GlobalTaskController {
             }
         }
 
-        // Ultimate fallback: If still null, grab the first member of this family
         if (creator == null) {
             List<FamilyMember> members = familyMemberRepository.findByFamilyId(family.getId());
             if (!members.isEmpty()) {
@@ -64,23 +62,63 @@ public class GlobalTaskController {
         }
 
         GlobalTask newTask = globalTaskService.createTask(
-                family, request.title(), request.originModule(), creator, assignee, request.dueDate()
+                family, 
+                request.title(), 
+                request.description(), 
+                request.originModule(), 
+                creator, 
+                assignee, 
+                request.dueDate()
         );
 
-        return ResponseEntity.ok(newTask);
+        return ResponseEntity.status(HttpStatus.CREATED).body(newTask);
     }
 
-    // 2. Get the unified feed for a specific family
     @GetMapping("/family/{familyId}")
     public ResponseEntity<List<GlobalTask>> getFamilyTasks(@PathVariable UUID familyId) {
-        List<GlobalTask> tasks = globalTaskService.getPendingTasksForFamily(familyId);
+        List<GlobalTask> tasks = globalTaskService.getAllTasksForFamily(familyId);
         return ResponseEntity.ok(tasks);
     }
 
-    // 3. Mark a task as completed
+    @PutMapping("/{taskId}")
+    public ResponseEntity<GlobalTask> updateTask(@PathVariable UUID taskId, @RequestBody UpdateTaskRequest request) {
+        FamilyMember assignee = null;
+        if (request.assignedToMemberId() != null) {
+            assignee = familyMemberRepository.findById(request.assignedToMemberId()).orElse(null);
+        }
+
+        GlobalTask updatedTask = globalTaskService.updateTask(
+                taskId,
+                request.title(),
+                request.description(),
+                request.originModule(),
+                assignee,
+                request.dueDate()
+        );
+
+        return ResponseEntity.ok(updatedTask);
+    }
+
     @PutMapping("/{taskId}/complete")
-    public ResponseEntity<GlobalTask> completeTask(@PathVariable UUID taskId) {
-        GlobalTask completedTask = globalTaskService.completeTask(taskId);
+    public ResponseEntity<GlobalTask> completeTask(@PathVariable UUID taskId, Authentication authentication) {
+        GlobalTask task = globalTaskService.getTaskById(taskId);
+        
+        FamilyMember completer = null;
+        if (authentication != null) {
+            String email = authentication.getName();
+            User user = userRepository.findByEmail(email).orElse(null);
+            if (user != null && task != null) {
+                completer = familyMemberRepository.findByFamilyAndUser(task.getFamily(), user).orElse(null);
+            }
+        }
+
+        GlobalTask completedTask = globalTaskService.completeTask(taskId, completer);
         return ResponseEntity.ok(completedTask);
+    }
+
+    @DeleteMapping("/{taskId}")
+    public ResponseEntity<Void> deleteTask(@PathVariable UUID taskId) {
+        globalTaskService.deleteTask(taskId);
+        return ResponseEntity.noContent().build();
     }
 }

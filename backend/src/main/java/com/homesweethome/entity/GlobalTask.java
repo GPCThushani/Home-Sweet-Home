@@ -1,5 +1,6 @@
 package com.homesweethome.entity;
 
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import jakarta.persistence.*;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -22,32 +23,38 @@ public class GlobalTask {
     @GeneratedValue(strategy = GenerationType.UUID)
     private UUID id;
 
-    // Links the task to the specific digital home
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "family_id", nullable = false)
+    @JsonIgnoreProperties({"hibernateLazyInitializer", "handler"})
     private Family family;
 
     @Column(nullable = false)
     private String title;
 
-    // Tells the frontend which icon/color to use (e.g., 'PETS', 'FINANCE')
-    @Column(name = "origin_module", nullable = false, length = 50)
-    private String originModule; 
+    @Column(columnDefinition = "TEXT")
+    private String description;
 
-    // Lombok builder default ensures new tasks are always PENDING
+    @Column(name = "origin_module", nullable = false, length = 50)
+    private String originModule;
+
     @Builder.Default
-    @Column(length = 50)
+    @Column(nullable = false, length = 50)
     private String status = "PENDING";
 
-    // Who needs to do the task
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "assigned_to")
+    @JsonIgnoreProperties({"hibernateLazyInitializer", "handler"})
     private FamilyMember assignedTo;
 
-    // Who created the task
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "created_by")
+    @JsonIgnoreProperties({"hibernateLazyInitializer", "handler"})
     private FamilyMember createdBy;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "completed_by")
+    @JsonIgnoreProperties({"hibernateLazyInitializer", "handler"})
+    private FamilyMember completedBy; // <-- RECORD WHO ACTUALLY COMPLETED IT
 
     private ZonedDateTime dueDate;
 

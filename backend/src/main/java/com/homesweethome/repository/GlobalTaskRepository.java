@@ -10,9 +10,6 @@ import java.util.UUID;
 @Repository
 public interface GlobalTaskRepository extends JpaRepository<GlobalTask, UUID> {
     
-    // Fetch all tasks for the family feed
-    List<GlobalTask> findByFamilyId(UUID familyId);
-    
-    // Fetch tasks by family and status (e.g., all "PENDING" tasks)
-    List<GlobalTask> findByFamilyIdAndStatus(UUID familyId, String status);
+    // Fetch ALL tasks (pending and completed) for the family feed
+    List<GlobalTask> findByFamilyIdOrderByCreatedAtDesc(UUID familyId);
 }

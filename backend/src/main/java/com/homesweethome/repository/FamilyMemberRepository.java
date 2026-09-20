@@ -29,4 +29,8 @@ public interface FamilyMemberRepository extends JpaRepository<FamilyMember, UUID
     // 4. Find specific family member record by family and user entities using explicit JPQL query
     @Query("SELECT fm FROM FamilyMember fm WHERE fm.family = :family AND fm.user = :user")
     Optional<FamilyMember> findByFamilyAndUser(@Param("family") Family family, @Param("user") User user);
+
+    // 5. Fetch only family members who have an active registered/logged-in user account linked
+    @Query("SELECT fm FROM FamilyMember fm WHERE fm.family.id = :familyId AND fm.user IS NOT NULL")
+    List<FamilyMember> findByFamilyIdAndUserIsNotNull(@Param("familyId") UUID familyId);
 }

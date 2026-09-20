@@ -18,43 +18,78 @@ public class GlobalTaskService {
 
     private final GlobalTaskRepository globalTaskRepository;
 
-    // Create a new task (can originate from Chores, Health, or Finance)
-    public GlobalTask createTask(Family family, String title, String originModule, 
-                                 FamilyMember createdBy, FamilyMember assignedTo, 
-                                 ZonedDateTime dueDate) {
-        
+    @Transactional
+    public GlobalTask createTask(
+            Family family,
+            String title,
+            String description,
+            String originModule,
+            FamilyMember createdBy,
+            FamilyMember assignedTo,
+            ZonedDateTime dueDate
+    ) {
         GlobalTask newTask = GlobalTask.builder()
                 .family(family)
                 .title(title)
-                .originModule(originModule) // e.g., "HEALTH", "CHORES"
+                .description(description)
+                .originModule(originModule)
                 .createdBy(createdBy)
                 .assignedTo(assignedTo)
                 .dueDate(dueDate)
-                // Note: status defaults to "PENDING" automatically via our Entity builder
+                .status("PENDING")
                 .build();
 
         return globalTaskRepository.save(newTask);
     }
 
-    // Fetch the unified dashboard feed for a family
+    @Transactional(readOnly = true)
     public List<GlobalTask> getAllTasksForFamily(UUID familyId) {
-        return globalTaskRepository.findByFamilyId(familyId);
+        return globalTaskRepository.findByFamilyIdOrderByCreatedAtDesc(familyId);
     }
 
-    // Fetch only pending tasks
-    public List<GlobalTask> getPendingTasksForFamily(UUID familyId) {
-        return globalTaskRepository.findByFamilyIdAndStatus(familyId, "PENDING");
+    @Transactional(readOnly = true)
+    public GlobalTask getTaskById(UUID taskId) {
+        return globalTaskRepository.findById(taskId)
+                .orElseThrow(() -> new IllegalArgumentException("Task not found with ID: " + taskId));
     }
 
-    // Mark a task as completed
     @Transactional
-    public GlobalTask completeTask(UUID taskId) {
+    public GlobalTask updateTask(
+            UUID taskId,
+            String title,
+            String description,
+            String originModule,
+            FamilyMember assignedTo,
+            ZonedDateTime dueDate
+    ) {
+        GlobalTask task = globalTaskRepository.findById(taskId)
+                .orElseThrow(() -> new IllegalArgumentException("Task not found with ID: " + taskId));
+
+        task.setTitle(title);
+        task.setDescription(description);
+        task.setOriginModule(originModule);
+        task.setAssignedTo(assignedTo);
+        task.setDueDate(dueDate);
+
+        return globalTaskRepository.save(task);
+    }
+
+    @Transactional
+    public GlobalTask completeTask(UUID taskId, FamilyMember completer) {
         GlobalTask task = globalTaskRepository.findById(taskId)
                 .orElseThrow(() -> new IllegalArgumentException("Task not found with ID: " + taskId));
         
         task.setStatus("COMPLETED");
         task.setCompletedAt(ZonedDateTime.now());
+        task.setCompletedBy(completer); 
         
         return globalTaskRepository.save(task);
+    }
+
+    @Transactional
+    public void deleteTask(UUID taskId) {
+        GlobalTask task = globalTaskRepository.findById(taskId)
+                .orElseThrow(() -> new IllegalArgumentException("Task not found with ID: " + taskId));
+        globalTaskRepository.delete(task);
     }
 }
