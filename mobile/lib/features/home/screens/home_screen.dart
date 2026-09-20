@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:http/http.dart' as http;
@@ -18,6 +19,9 @@ class _HomeScreenState extends State<HomeScreen> {
   bool _isLoading = true;
   String _familyName = 'Our Family';
   String _inviteCode = 'Loading...';
+  String? _familyId;
+  String? _familyAvatarPath;
+  int _memberCount = 1;
 
   @override
   void initState() {
@@ -45,6 +49,9 @@ class _HomeScreenState extends State<HomeScreen> {
           setState(() {
             _familyName = families[0]['name'] ?? 'Our Family';
             _inviteCode = families[0]['inviteCode'] ?? 'HSH-DEMO2026';
+            _familyId = families[0]['id'];
+            _familyAvatarPath = families[0]['avatarPath'];
+            _memberCount = families[0]['memberCount'] ?? 1;
             _isLoading = false;
           });
         } else {
@@ -60,20 +67,47 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   Future<void> _logout(BuildContext context) async {
-    // 1. Clear saved user session data from local storage
     final prefs = await SharedPreferences.getInstance();
     await prefs.clear();
 
-    // 2. Navigate back to the Login screen and clear the navigation stack
     if (context.mounted) {
       Navigator.pushAndRemoveUntil(
         context,
-        MaterialPageRoute(
-          builder: (context) => const LoginScreen(),
-        ),
+        MaterialPageRoute(builder: (context) => const LoginScreen()),
         (route) => false,
       );
     }
+  }
+
+  Widget _buildAvatarImage(String? path, double size) {
+    if (path == null || path.isEmpty) {
+      return Icon(Icons.family_restroom_rounded, color: const Color(0xFF4A8B71), size: size * 0.5);
+    }
+
+    if (path.startsWith('/') || path.startsWith('file://')) {
+      final cleanPath = path.replaceFirst('file://', '');
+      return Image.file(
+        File(cleanPath),
+        width: size,
+        height: size,
+        fit: BoxFit.cover,
+        errorBuilder: (context, error, stackTrace) =>
+            Icon(Icons.family_restroom_rounded, color: const Color(0xFF4A8B71), size: size * 0.5),
+      );
+    }
+
+    if (path.startsWith('assets/')) {
+      return Image.asset(
+        path,
+        width: size,
+        height: size,
+        fit: BoxFit.cover,
+        errorBuilder: (context, error, stackTrace) =>
+            Icon(Icons.family_restroom_rounded, color: const Color(0xFF4A8B71), size: size * 0.5),
+      );
+    }
+
+    return Icon(Icons.family_restroom_rounded, color: const Color(0xFF4A8B71), size: size * 0.5);
   }
 
   @override
@@ -86,8 +120,17 @@ class _HomeScreenState extends State<HomeScreen> {
         automaticallyImplyLeading: false,
         title: Row(
           children: [
-            const Icon(Icons.home_rounded, color: Color(0xFF4A8B71), size: 28),
-            const SizedBox(width: 8),
+            Container(
+              width: 36,
+              height: 36,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color: const Color(0xFFE8F2ED),
+                border: Border.all(color: const Color(0xFF4A8B71), width: 1.5),
+              ),
+              child: ClipOval(child: _buildAvatarImage(_familyAvatarPath, 36)),
+            ),
+            const SizedBox(width: 10),
             Text(
               _familyName,
               style: const TextStyle(
@@ -107,7 +150,7 @@ class _HomeScreenState extends State<HomeScreen> {
         ],
       ),
       body: SafeArea(
-        child: Padding(
+        child: SingleChildScrollView(
           padding: const EdgeInsets.all(24.0),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -121,33 +164,49 @@ class _HomeScreenState extends State<HomeScreen> {
                   borderRadius: BorderRadius.circular(20),
                   border: Border.all(color: const Color(0xFFD0E0D8), width: 1.5),
                 ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
+                child: Row(
                   children: [
-                    const Text(
-                      'Welcome back,',
-                      style: TextStyle(fontSize: 14, color: Color(0xFF4A8B71), fontWeight: FontWeight.w600),
-                    ),
-                    const SizedBox(height: 4),
-                    Text(
-                      widget.userEmail,
-                      style: const TextStyle(
-                        fontSize: 18,
-                        fontWeight: FontWeight.bold,
-                        color: Color(0xFF244032),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Text(
+                            'Welcome back,',
+                            style: TextStyle(fontSize: 14, color: Color(0xFF4A8B71), fontWeight: FontWeight.w600),
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            widget.userEmail,
+                            style: const TextStyle(
+                              fontSize: 16,
+                              fontWeight: FontWeight.bold,
+                              color: Color(0xFF244032),
+                            ),
+                          ),
+                          const SizedBox(height: 8),
+                          Text(
+                            '$_memberCount family members connected.',
+                            style: const TextStyle(fontSize: 13, color: Colors.black54),
+                          ),
+                        ],
                       ),
                     ),
-                    const SizedBox(height: 12),
-                    const Text(
-                      'Your family dashboard is ready. Let’s make today productive and cozy!',
-                      style: TextStyle(fontSize: 14, color: Colors.black54),
+                    Container(
+                      width: 60,
+                      height: 60,
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        color: Colors.white,
+                        border: Border.all(color: const Color(0xFF4A8B71), width: 2),
+                      ),
+                      child: ClipOval(child: _buildAvatarImage(_familyAvatarPath, 60)),
                     ),
                   ],
                 ),
               ),
               const SizedBox(height: 20),
 
-              // --- INVITE CODE CARD (Testing & Easy Access) ---
+              // --- INVITE CODE CARD ---
               Container(
                 width: double.infinity,
                 padding: const EdgeInsets.all(16),
@@ -155,13 +214,6 @@ class _HomeScreenState extends State<HomeScreen> {
                   color: Colors.white,
                   borderRadius: BorderRadius.circular(16),
                   border: Border.all(color: const Color(0xFF4A8B71).withValues(alpha: 0.3), width: 1.5),
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.black.withValues(alpha: 0.02),
-                      blurRadius: 8,
-                      offset: const Offset(0, 4),
-                    ),
-                  ],
                 ),
                 child: Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -214,42 +266,50 @@ class _HomeScreenState extends State<HomeScreen> {
                 ),
               ),
               const SizedBox(height: 16),
-              Expanded(
-                child: GridView.count(
-                  crossAxisCount: 2,
-                  crossAxisSpacing: 16,
-                  mainAxisSpacing: 16,
-                  children: [
-                    _buildFeatureCard(
-                      icon: Icons.task_alt,
-                      title: 'Global Tasks',
-                      subtitle: 'View chores',
-                      color: Colors.orange.shade50,
-                      iconColor: Colors.orange.shade700,
-                    ),
-                    _buildFeatureCard(
-                      icon: Icons.people_outline,
-                      title: 'Family Avatars',
-                      subtitle: 'Manage members',
-                      color: Colors.blue.shade50,
-                      iconColor: Colors.blue.shade700,
-                    ),
-                    _buildFeatureCard(
-                      icon: Icons.shopping_bag_outlined,
-                      title: 'Groceries',
-                      subtitle: 'Shared lists',
-                      color: Colors.purple.shade50,
-                      iconColor: Colors.purple.shade700,
-                    ),
-                    _buildFeatureCard(
-                      icon: Icons.settings_outlined,
-                      title: 'Settings',
-                      subtitle: 'House preferences',
-                      color: Colors.green.shade50,
-                      iconColor: const Color(0xFF4A8B71),
-                    ),
-                  ],
-                ),
+              GridView.count(
+                shrinkWrap: true,
+                physics: const NeverScrollableScrollPhysics(),
+                crossAxisCount: 2,
+                crossAxisSpacing: 16,
+                mainAxisSpacing: 16,
+                children: [
+                  _buildFeatureCard(
+                    icon: Icons.task_alt,
+                    title: 'Global Tasks',
+                    subtitle: 'View chores',
+                    color: Colors.orange.shade50,
+                    iconColor: Colors.orange.shade700,
+                    onTap: () {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(content: Text('Access Household Tasks from the bottom navigation bar.')),
+                      );
+                    },
+                  ),
+                  _buildFeatureCard(
+                    icon: Icons.people_outline,
+                    title: 'Family Avatars',
+                    subtitle: 'Manage members',
+                    color: Colors.blue.shade50,
+                    iconColor: Colors.blue.shade700,
+                    onTap: () {},
+                  ),
+                  _buildFeatureCard(
+                    icon: Icons.shopping_bag_outlined,
+                    title: 'Groceries',
+                    subtitle: 'Shared lists',
+                    color: Colors.purple.shade50,
+                    iconColor: Colors.purple.shade700,
+                    onTap: () {},
+                  ),
+                  _buildFeatureCard(
+                    icon: Icons.settings_outlined,
+                    title: 'Settings',
+                    subtitle: 'House preferences',
+                    color: Colors.green.shade50,
+                    iconColor: const Color(0xFF4A8B71),
+                    onTap: () {},
+                  ),
+                ],
               ),
             ],
           ),
@@ -264,48 +324,53 @@ class _HomeScreenState extends State<HomeScreen> {
     required String subtitle,
     required Color color,
     required Color iconColor,
+    required VoidCallback onTap,
   }) {
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: Colors.grey.shade200, width: 1.5),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.02),
-            blurRadius: 8,
-            offset: const Offset(0, 4),
-          ),
-        ],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Container(
-            padding: const EdgeInsets.all(12),
-            decoration: BoxDecoration(
-              color: color,
-              borderRadius: BorderRadius.circular(12),
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(20),
+      child: Container(
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(color: Colors.grey.shade200, width: 1.5),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.02),
+              blurRadius: 8,
+              offset: const Offset(0, 4),
             ),
-            child: Icon(icon, color: iconColor, size: 28),
-          ),
-          const SizedBox(height: 16),
-          Text(
-            title,
-            style: const TextStyle(
-              fontSize: 16,
-              fontWeight: FontWeight.bold,
-              color: Color(0xFF244032),
+          ],
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: color,
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Icon(icon, color: iconColor, size: 28),
             ),
-          ),
-          const SizedBox(height: 2),
-          Text(
-            subtitle,
-            style: TextStyle(fontSize: 12, color: Colors.grey.shade500),
-          ),
-        ],
+            const SizedBox(height: 16),
+            Text(
+              title,
+              style: const TextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.bold,
+                color: Color(0xFF244032),
+              ),
+            ),
+            const SizedBox(height: 2),
+            Text(
+              subtitle,
+              style: TextStyle(fontSize: 12, color: Colors.grey.shade500),
+            ),
+          ],
+        ),
       ),
     );
   }

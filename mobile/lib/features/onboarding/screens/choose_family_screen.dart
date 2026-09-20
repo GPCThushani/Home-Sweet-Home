@@ -5,7 +5,7 @@ import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 import 'create_or_join_family_screen.dart';
 import 'join_family_bottom_sheet.dart';
-import '../../home/screens/home_screen.dart';
+import '../../../shared/widgets/main_navigation_shell.dart';
 
 class FamilyModel {
   final String id;
@@ -21,7 +21,6 @@ class FamilyModel {
   });
 
   factory FamilyModel.fromJson(Map<String, dynamic> json) {
-    print("DEBUG: Raw JSON from backend = $json");
     return FamilyModel(
       id: json['id'].toString(),
       name: json['name'] ?? 'The Family',
@@ -64,9 +63,6 @@ class _ChooseFamilyScreenState extends State<ChooseFamilyScreen> {
         },
       );
 
-      print("DEBUG: Fetch families response code = ${response.statusCode}");
-      print("DEBUG: Fetch families response body = ${response.body}");
-
       if (response.statusCode == 200) {
         final List<dynamic> data = jsonDecode(response.body);
         setState(() {
@@ -92,15 +88,16 @@ class _ChooseFamilyScreenState extends State<ChooseFamilyScreen> {
     Navigator.pushAndRemoveUntil(
       context,
       MaterialPageRoute(
-        builder: (context) => HomeScreen(userEmail: widget.userEmail),
+        builder: (context) => MainNavigationShell(
+          userEmail: widget.userEmail,
+          familyId: family.id,
+        ),
       ),
       (route) => false,
     );
   }
 
   Widget _buildFamilyAvatar(String? path) {
-    print("DEBUG: _buildFamilyAvatar received path = '$path'");
-
     if (path == null || path.isEmpty) {
       return const Icon(
         Icons.family_restroom_rounded,
@@ -109,7 +106,6 @@ class _ChooseFamilyScreenState extends State<ChooseFamilyScreen> {
       );
     }
 
-    // Handle local image file paths
     if (path.startsWith('/') || path.startsWith('file://')) {
       final cleanPath = path.replaceFirst('file://', '');
       return ClipOval(
@@ -118,15 +114,12 @@ class _ChooseFamilyScreenState extends State<ChooseFamilyScreen> {
           width: 58,
           height: 58,
           fit: BoxFit.cover,
-          errorBuilder: (context, error, stackTrace) {
-            print("ERROR rendering local image file: $error");
-            return const Icon(Icons.family_restroom_rounded, color: Color(0xFF4A8B71), size: 28);
-          },
+          errorBuilder: (context, error, stackTrace) =>
+              const Icon(Icons.family_restroom_rounded, color: Color(0xFF4A8B71), size: 28),
         ),
       );
     }
 
-    // Handle preset asset paths
     if (path.startsWith('assets/')) {
       return ClipOval(
         child: Image.asset(
@@ -134,10 +127,8 @@ class _ChooseFamilyScreenState extends State<ChooseFamilyScreen> {
           width: 58,
           height: 58,
           fit: BoxFit.cover,
-          errorBuilder: (context, error, stackTrace) {
-            print("ERROR rendering asset image: $error");
-            return const Icon(Icons.family_restroom_rounded, color: Color(0xFF4A8B71), size: 28);
-          },
+          errorBuilder: (context, error, stackTrace) =>
+              const Icon(Icons.family_restroom_rounded, color: Color(0xFF4A8B71), size: 28),
         ),
       );
     }
@@ -183,7 +174,6 @@ class _ChooseFamilyScreenState extends State<ChooseFamilyScreen> {
                 ),
               ),
               const SizedBox(height: 32),
-
               Expanded(
                 child: _isLoading
                     ? const Center(
@@ -312,10 +302,7 @@ class _ChooseFamilyScreenState extends State<ChooseFamilyScreen> {
                             },
                           ),
               ),
-
               const SizedBox(height: 16),
-
-              // Create family button
               OutlinedButton.icon(
                 onPressed: () {
                   Navigator.push(
@@ -327,11 +314,7 @@ class _ChooseFamilyScreenState extends State<ChooseFamilyScreen> {
                     ),
                   );
                 },
-                icon: const Icon(
-                  Icons.add_rounded,
-                  color: Color(0xFF4A8B71),
-                  size: 22,
-                ),
+                icon: const Icon(Icons.add_rounded, color: Color(0xFF4A8B71), size: 22),
                 label: const Text(
                   'Create a family space',
                   style: TextStyle(
@@ -343,18 +326,11 @@ class _ChooseFamilyScreenState extends State<ChooseFamilyScreen> {
                 style: OutlinedButton.styleFrom(
                   backgroundColor: Colors.white,
                   minimumSize: const Size(double.infinity, 56),
-                  side: const BorderSide(
-                    color: Color(0xFF4A8B71),
-                    width: 1.5,
-                  ),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(16),
-                  ),
+                  side: const BorderSide(color: Color(0xFF4A8B71), width: 1.5),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
                 ),
               ),
               const SizedBox(height: 12),
-
-              // Join with invite code button
               ElevatedButton.icon(
                 onPressed: () {
                   showModalBottomSheet(
@@ -367,11 +343,7 @@ class _ChooseFamilyScreenState extends State<ChooseFamilyScreen> {
                     builder: (context) => JoinFamilyBottomSheet(userEmail: widget.userEmail),
                   );
                 },
-                icon: const Icon(
-                  Icons.group_add_rounded,
-                  color: Colors.white,
-                  size: 22,
-                ),
+                icon: const Icon(Icons.group_add_rounded, color: Colors.white, size: 22),
                 label: const Text(
                   'Join with Invite Code',
                   style: TextStyle(
@@ -383,9 +355,7 @@ class _ChooseFamilyScreenState extends State<ChooseFamilyScreen> {
                 style: ElevatedButton.styleFrom(
                   backgroundColor: const Color(0xFF4A8B71),
                   minimumSize: const Size(double.infinity, 56),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(16),
-                  ),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
                   elevation: 0,
                 ),
               ),

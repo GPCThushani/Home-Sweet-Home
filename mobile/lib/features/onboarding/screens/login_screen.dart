@@ -4,7 +4,7 @@ import 'dart:convert';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'choose_family_screen.dart';
 import 'create_or_join_family_screen.dart';
-import 'sign_up_screen.dart'; // Import your SignUpScreen file
+import 'sign_up_screen.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -63,25 +63,41 @@ class _LoginScreenState extends State<LoginScreen> {
           await prefs.setString('user_id', userId);
         }
 
-        final hasFamily = prefs.getBool('has_family') ?? false;
+        // Check if the user already belongs to a family via backend API
+        final familyCheckUrl = Uri.parse('http://10.0.2.2:8080/api/families/user?email=$email');
+        final familyResponse = await http.get(
+          familyCheckUrl,
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': 'Bearer $token',
+          },
+        );
+
+        bool hasFamily = false;
+        if (familyResponse.statusCode == 200) {
+          final List<dynamic> families = jsonDecode(familyResponse.body);
+          hasFamily = families.isNotEmpty;
+        }
 
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(content: Text("Logged in successfully!"), backgroundColor: Colors.green),
           );
           
-          if (!hasFamily) {
-            Navigator.pushReplacement(
-              context,
-              MaterialPageRoute(
-                builder: (context) => CreateOrJoinFamilyScreen(userEmail: email),
-              ),
-            );
-          } else {
+          if (hasFamily) {
+            // --- ROUTE TO CHOOSE FAMILY SCREEN UPON SUCCESSFUL LOGIN ---
             Navigator.pushReplacement(
               context,
               MaterialPageRoute(
                 builder: (context) => ChooseFamilyScreen(userEmail: email),
+              ),
+            );
+          } else {
+            // Only route to create/join if they have no families attached
+            Navigator.pushReplacement(
+              context,
+              MaterialPageRoute(
+                builder: (context) => CreateOrJoinFamilyScreen(userEmail: email),
               ),
             );
           }
@@ -229,7 +245,6 @@ class _LoginScreenState extends State<LoginScreen> {
               ),
               const SizedBox(height: 24),
 
-              // --- SIGN UP ROUTING ROW ---
               Row(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
