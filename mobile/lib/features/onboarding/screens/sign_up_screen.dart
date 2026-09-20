@@ -85,14 +85,13 @@ class _SignUpScreenState extends State<SignUpScreen> {
       if (response.statusCode == 200 || response.statusCode == 201) {
         final data = jsonDecode(response.body);
         
-        // Extract userId and token from AuthenticationResponse
         final userId = data['userId']?.toString();
         final token = data['token']?.toString();
 
         final prefs = await SharedPreferences.getInstance();
         await prefs.setString('user_email', email);
         if (userId != null) {
-          await prefs.setString('user_id', userId); // <-- SAVED LOCALLY FOR ONBOARDING
+          await prefs.setString('user_id', userId);
         }
         if (token != null) {
           await prefs.setString('jwt_token', token);

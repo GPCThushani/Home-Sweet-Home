@@ -2,7 +2,7 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
-import '../../home/screens/home_screen.dart';
+import '../../../shared/widgets/main_navigation_shell.dart'; // Import your correct navigation shell
 
 class JoinFamilyBottomSheet extends StatefulWidget {
   final String userEmail;
@@ -38,10 +38,12 @@ class _JoinFamilyBottomSheetState extends State<JoinFamilyBottomSheet> {
       final jwtToken = prefs.getString('jwt_token');
       String? userId = prefs.getString('user_id');
 
-      // Fallback: fetch user ID if not found in preferences
       if (userId == null) {
         final userResponse = await http.get(
           Uri.parse('http://10.0.2.2:8080/api/users/by-email?email=${widget.userEmail}'),
+          headers: {
+            if (jwtToken != null) 'Authorization': 'Bearer $jwtToken',
+          },
         );
         if (userResponse.statusCode == 200) {
           final userData = jsonDecode(userResponse.body);
@@ -75,12 +77,25 @@ class _JoinFamilyBottomSheetState extends State<JoinFamilyBottomSheet> {
       );
 
       if (response.statusCode == 200) {
+        final responseData = jsonDecode(response.body);
+        
+        // Correctly extract the family ID from the joined response
+        final familyId = responseData['familyId']?.toString() ?? responseData['id']?.toString();
+
         await prefs.setBool('has_family', true);
+        if (familyId != null) {
+          await prefs.setString('current_family_id', familyId);
+        }
+
         if (mounted) {
+          // --- ROUTE DIRECTLY TO MainNavigationShell JUST LIKE ChooseFamilyScreen DOES ---
           Navigator.pushAndRemoveUntil(
             context,
             MaterialPageRoute(
-              builder: (context) => HomeScreen(userEmail: widget.userEmail),
+              builder: (context) => MainNavigationShell(
+                userEmail: widget.userEmail,
+                familyId: familyId ?? '',
+              ),
             ),
             (route) => false,
           );

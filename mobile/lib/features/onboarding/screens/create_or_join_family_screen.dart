@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
-import 'family_setup_screen.dart'; // Import Step 4 screen
-import 'join_family_bottom_sheet.dart'; // Import the join bottom sheet dialog
+import 'family_setup_screen.dart'; 
+import 'join_family_bottom_sheet.dart'; 
 
 class CreateOrJoinFamilyScreen extends StatelessWidget {
   final String userEmail;
@@ -42,7 +42,6 @@ class CreateOrJoinFamilyScreen extends StatelessWidget {
               ),
               const SizedBox(height: 30),
 
-              // --- FAMILY ILLUSTRATION CONTAINER ---
               Container(
                 height: 180,
                 width: double.infinity,
@@ -66,13 +65,11 @@ class CreateOrJoinFamilyScreen extends StatelessWidget {
               ),
               const SizedBox(height: 40),
 
-              // --- OPTION 1: CREATE A NEW FAMILY ---
               _buildChoiceCard(
                 icon: Icons.group_add_rounded,
                 title: 'Create a new family',
                 subtitle: 'Start your family space as the admin',
                 onTap: () {
-                  // Route to Step 4: Family Setup Screen to collect name, motto, and avatar
                   Navigator.push(
                     context,
                     MaterialPageRoute(
@@ -83,13 +80,11 @@ class CreateOrJoinFamilyScreen extends StatelessWidget {
               ),
               const SizedBox(height: 16),
 
-              // --- OPTION 2: JOIN AN EXISTING FAMILY ---
               _buildChoiceCard(
                 icon: Icons.login_rounded,
                 title: 'Join an existing family',
                 subtitle: 'Use an invite code from a family member',
                 onTap: () {
-                  // Opens the Join Family bottom sheet dialog
                   showModalBottomSheet(
                     context: context,
                     isScrollControlled: true,

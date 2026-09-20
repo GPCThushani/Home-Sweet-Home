@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'dart:io';
-import 'add_family_members_screen.dart'; // Import Step 5 screen
+import 'add_family_members_screen.dart'; 
 
 class FamilySetupScreen extends StatefulWidget {
   final String userEmail;
@@ -239,7 +239,6 @@ class _FamilySetupScreenState extends State<FamilySetupScreen> {
                     return;
                   }
 
-                  // PASSING CUSTOM IMAGE PATH AND PRESET INDEX FORWARD
                   Navigator.push(
                     context,
                     MaterialPageRoute(
