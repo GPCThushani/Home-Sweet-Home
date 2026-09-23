@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../../features/home/screens/home_screen.dart';
 import '../../features/tasks/screens/global_tasks_screen.dart'; 
+import '../../features/more/screens/more_screen.dart'; // <-- MAKE SURE THIS IMPORT EXISTS
 
 class MainNavigationShell extends StatefulWidget {
   final String userEmail;
@@ -31,8 +32,8 @@ class _MainNavigationShellState extends State<MainNavigationShell> {
           // Placeholder for Calendar Screen until fully implemented
           const Center(child: Text("Calendar Screen (Coming Soon)", style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Color(0xFF244032)))),
           GlobalTasksScreen(userEmail: widget.userEmail, familyId: widget.familyId),
-          // Placeholder for More Screen until fully implemented
-          const Center(child: Text("More Screen (Coming Soon)", style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Color(0xFF244032)))),
+          // --- NOW CALLING YOUR NEW MORE SCREEN ---
+          MoreScreen(userEmail: widget.userEmail, familyId: widget.familyId),
         ],
       ),
       bottomNavigationBar: Container(
