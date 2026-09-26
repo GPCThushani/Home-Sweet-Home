@@ -40,11 +40,10 @@ class HomeReadyScreen extends StatelessWidget {
     String? userId = prefs.getString('user_id');
     String? jwtToken = prefs.getString('jwt_token');
 
-    // Fallback if user_id was dropped: query backend by email
     if (userId == null && userEmail.isNotEmpty) {
       try {
         final lookupResponse = await http.get(
-          Uri.parse('http://10.0.2.2:8080/api/users/by-email?email=$userEmail'),
+          Uri.parse('http://localhost:8080/api/users/by-email?email=$userEmail'),
         );
         if (lookupResponse.statusCode == 200) {
           final userData = jsonDecode(lookupResponse.body);
@@ -58,7 +57,6 @@ class HomeReadyScreen extends StatelessWidget {
       }
     }
 
-    // Determine avatar path to send to the backend
     String? resolvedAvatarPath = customAvatarPath;
     if (resolvedAvatarPath == null && presetAvatarIndex != null && presetAvatarIndex! >= 0 && presetAvatarIndex! < _presetAvatars.length) {
       resolvedAvatarPath = _presetAvatars[presetAvatarIndex!];
@@ -70,7 +68,7 @@ class HomeReadyScreen extends StatelessWidget {
     if (userId != null) {
       try {
         final response = await http.post(
-          Uri.parse('http://10.0.2.2:8080/api/families'),
+          Uri.parse('http://localhost:8080/api/families'),
           headers: {
             'Content-Type': 'application/json',
             if (jwtToken != null) 'Authorization': 'Bearer $jwtToken',
@@ -151,15 +149,18 @@ class HomeReadyScreen extends StatelessWidget {
 
     return Scaffold(
       backgroundColor: const Color(0xFFF8FAF9),
-      body: Stack(
-        children: [
-          SafeArea(
+      body: SafeArea(
+        child: SingleChildScrollView(
+          child: ConstrainedBox(
+            constraints: BoxConstraints(
+              minHeight: MediaQuery.of(context).size.height - MediaQuery.of(context).padding.top - MediaQuery.of(context).padding.bottom,
+            ),
             child: Padding(
               padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 20),
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  const Spacer(),
+                  const SizedBox(height: 40),
                   Container(
                     width: 144,
                     height: 144,
@@ -192,7 +193,7 @@ class HomeReadyScreen extends StatelessWidget {
                     textAlign: TextAlign.center,
                     style: TextStyle(fontSize: 24, fontWeight: FontWeight.w700, color: Color(0xFF355E4A)),
                   ),
-                  const Spacer(),
+                  const SizedBox(height: 40),
                   ElevatedButton(
                     onPressed: () => _completeOnboarding(context),
                     style: ElevatedButton.styleFrom(
@@ -211,7 +212,7 @@ class HomeReadyScreen extends StatelessWidget {
               ),
             ),
           ),
-        ],
+        ),
       ),
     );
   }

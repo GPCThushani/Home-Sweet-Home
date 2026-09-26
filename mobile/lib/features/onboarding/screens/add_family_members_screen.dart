@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'home_features_screen.dart'; // <-- NAVIGATES TO FEATURES SCREEN FIRST
+import 'home_features_screen.dart';
 
 class FamilyMember {
   String name;
@@ -404,19 +404,19 @@ class _AddFamilyMembersScreenState extends State<AddFamilyMembersScreen> {
                     child: Row(
                       children: [
                         CircleAvatar(
-                          radius: 26,
+                          radius: 24,
                           backgroundColor: const Color(0xFFE8F2ED),
                           child: ClipOval(
                             child: Image.asset(
                               member.avatarAsset,
-                              width: 52,
-                              height: 52,
+                              width: 48,
+                              height: 48,
                               fit: BoxFit.cover,
                               errorBuilder: (context, error, stackTrace) => const Icon(Icons.person, color: Color(0xFF4A8B71)),
                             ),
                           ),
                         ),
-                        const SizedBox(width: 16),
+                        const SizedBox(width: 12),
                         Expanded(
                           child: InkWell(
                             onTap: () => _showMemberDialog(memberToEdit: member, index: index),
@@ -426,50 +426,62 @@ class _AddFamilyMembersScreenState extends State<AddFamilyMembersScreen> {
                                 Text(
                                   member.name,
                                   style: TextStyle(
-                                    fontSize: member.isPlaceholder ? 15 : 16,
+                                    fontSize: member.isPlaceholder ? 14 : 15,
                                     fontWeight: member.isPlaceholder ? FontWeight.w500 : FontWeight.bold,
                                     color: member.isPlaceholder ? Colors.grey.shade400 : const Color(0xFF244032),
                                     fontStyle: member.isPlaceholder ? FontStyle.italic : FontStyle.normal,
                                   ),
+                                  overflow: TextOverflow.ellipsis,
                                 ),
                                 const SizedBox(height: 2),
-                                Row(
+                                Wrap(
+                                  crossAxisAlignment: WrapCrossAlignment.center,
+                                  spacing: 6.0,
                                   children: [
                                     Text(
                                       member.role,
-                                      style: TextStyle(fontSize: 13, color: Colors.grey.shade500, fontWeight: FontWeight.w500),
+                                      style: TextStyle(fontSize: 12, color: Colors.grey.shade500, fontWeight: FontWeight.w500),
                                     ),
-                                    if (member.hasAccount) ...[
-                                      const SizedBox(width: 8),
+                                    if (member.hasAccount)
                                       Container(
-                                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                        padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
                                         decoration: BoxDecoration(
                                           color: const Color(0xFFE8F2ED),
                                           borderRadius: BorderRadius.circular(6),
                                         ),
-                                        child: const Text('App Access', style: TextStyle(fontSize: 10, color: Color(0xFF4A8B71), fontWeight: FontWeight.bold)),
+                                        child: const Text('App Access', style: TextStyle(fontSize: 9, color: Color(0xFF4A8B71), fontWeight: FontWeight.bold)),
                                       ),
-                                    ]
                                   ],
                                 ),
                               ],
                             ),
                           ),
                         ),
-                        if (member.hasAccount)
-                          IconButton(
-                            icon: const Icon(Icons.share_rounded, size: 20, color: Color(0xFF4A8B71)),
-                            tooltip: 'Send Invite',
-                            onPressed: () => _showInviteBottomSheet(member),
-                          ),
-                        IconButton(
-                          icon: Icon(Icons.edit_outlined, size: 20, color: Colors.grey.shade600),
-                          onPressed: () => _showMemberDialog(memberToEdit: member, index: index),
-                        ),
-                        IconButton(
-                          icon: const Icon(Icons.delete_outline_rounded, size: 20, color: Colors.redAccent),
-                          tooltip: 'Remove Member',
-                          onPressed: () => _confirmDelete(index),
+                        Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            if (member.hasAccount)
+                              IconButton(
+                                constraints: const BoxConstraints(),
+                                padding: const EdgeInsets.all(6),
+                                icon: const Icon(Icons.share_rounded, size: 18, color: Color(0xFF4A8B71)),
+                                tooltip: 'Send Invite',
+                                onPressed: () => _showInviteBottomSheet(member),
+                              ),
+                            IconButton(
+                              constraints: const BoxConstraints(),
+                              padding: const EdgeInsets.all(6),
+                              icon: Icon(Icons.edit_outlined, size: 18, color: Colors.grey.shade600),
+                              onPressed: () => _showMemberDialog(memberToEdit: member, index: index),
+                            ),
+                            IconButton(
+                              constraints: const BoxConstraints(),
+                              padding: const EdgeInsets.all(6),
+                              icon: const Icon(Icons.delete_outline_rounded, size: 18, color: Colors.redAccent),
+                              tooltip: 'Remove Member',
+                              onPressed: () => _confirmDelete(index),
+                            ),
+                          ],
                         ),
                       ],
                     ),
@@ -491,7 +503,6 @@ class _AddFamilyMembersScreenState extends State<AddFamilyMembersScreen> {
               const SizedBox(height: 16),
               ElevatedButton(
                 onPressed: () {
-                  // PASSES PARAMETERS FORWARD TO HOMESCREEN FEATURES SELECTION
                   Navigator.push(
                     context,
                     MaterialPageRoute(

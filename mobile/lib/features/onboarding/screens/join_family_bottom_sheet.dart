@@ -40,7 +40,7 @@ class _JoinFamilyBottomSheetState extends State<JoinFamilyBottomSheet> {
 
       if (userId == null) {
         final userResponse = await http.get(
-          Uri.parse('http://10.0.2.2:8080/api/users/by-email?email=${widget.userEmail}'),
+          Uri.parse('http://localhost:8080/api/users/by-email?email=${widget.userEmail}'),
           headers: {
             if (jwtToken != null) 'Authorization': 'Bearer $jwtToken',
           },
@@ -63,7 +63,7 @@ class _JoinFamilyBottomSheetState extends State<JoinFamilyBottomSheet> {
       }
 
       final response = await http.post(
-        Uri.parse('http://10.0.2.2:8080/api/families/join-by-code'),
+        Uri.parse('http://localhost:8080/api/families/join-by-code'),
         headers: {
           'Content-Type': 'application/json',
           if (jwtToken != null) 'Authorization': 'Bearer $jwtToken',

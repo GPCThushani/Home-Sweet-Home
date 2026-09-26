@@ -18,7 +18,7 @@ class GlobalTasksScreen extends StatefulWidget {
 }
 
 class _GlobalTasksScreenState extends State<GlobalTasksScreen> {
-  static const String _baseUrl = 'http://10.0.2.2:8080';
+  static const String _baseUrl = 'http://localhost:8080';
 
   bool _isLoading = true;
   List<Map<String, dynamic>> _tasks = [];
@@ -529,7 +529,7 @@ class CreateTaskBottomSheet extends StatefulWidget {
 }
 
 class _CreateTaskBottomSheetState extends State<CreateTaskBottomSheet> {
-  static const String _baseUrl = 'http://10.0.2.2:8080';
+  static const String _baseUrl = 'http://localhost:8080';
 
   final _titleController = TextEditingController();
   final _descriptionController = TextEditingController();
@@ -769,7 +769,7 @@ class EditTaskBottomSheet extends StatefulWidget {
 }
 
 class _EditTaskBottomSheetState extends State<EditTaskBottomSheet> {
-  static const String _baseUrl = 'http://10.0.2.2:8080';
+  static const String _baseUrl = 'http://localhost:8080';
 
   late final TextEditingController _titleController;
   late final TextEditingController _descriptionController;

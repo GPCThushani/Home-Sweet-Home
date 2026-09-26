@@ -39,7 +39,7 @@ class _LoginScreenState extends State<LoginScreen> {
     setState(() => _isLoading = true);
 
     try {
-      final url = Uri.parse('http://10.0.2.2:8080/api/users/login'); 
+      final url = Uri.parse('http://localhost:8080/api/users/login'); 
       
       final response = await http.post(
         url,
@@ -64,7 +64,7 @@ class _LoginScreenState extends State<LoginScreen> {
         }
 
         // Check if the user already belongs to a family via backend API
-        final familyCheckUrl = Uri.parse('http://10.0.2.2:8080/api/families/user?email=$email');
+        final familyCheckUrl = Uri.parse('http://localhost:8080/api/families/user?email=$email');
         final familyResponse = await http.get(
           familyCheckUrl,
           headers: {

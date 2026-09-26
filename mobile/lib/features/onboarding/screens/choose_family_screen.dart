@@ -54,7 +54,7 @@ class _ChooseFamilyScreenState extends State<ChooseFamilyScreen> {
       final prefs = await SharedPreferences.getInstance();
       final jwtToken = prefs.getString('jwt_token');
 
-      final url = Uri.parse('http://10.0.2.2:8080/api/families/user?email=${widget.userEmail}');
+      final url = Uri.parse('http://localhost:8080/api/families/user?email=${widget.userEmail}');
       final response = await http.get(
         url,
         headers: {
