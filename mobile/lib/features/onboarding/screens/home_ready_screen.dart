@@ -13,7 +13,7 @@ class HomeReadyScreen extends StatelessWidget {
   final int memberCount;
   final String userEmail;
 
-  HomeReadyScreen({
+  const HomeReadyScreen({
     super.key,
     required this.familyName,
     required this.familyMotto,
@@ -21,9 +21,7 @@ class HomeReadyScreen extends StatelessWidget {
     this.presetAvatarIndex,
     required this.memberCount,
     required this.userEmail,
-  }) {
-    print("DEBUG: HomeReadyScreen initialized with customAvatarPath = $customAvatarPath, presetAvatarIndex = $presetAvatarIndex");
-  }
+  });
 
   final List<String> _presetAvatars = const [
     'assets/images/family_avatars/avatar_1.png',
@@ -62,12 +60,10 @@ class HomeReadyScreen extends StatelessWidget {
       resolvedAvatarPath = _presetAvatars[presetAvatarIndex!];
     }
 
-    print("DEBUG: Final resolved user_id for family creation = $userId");
-    print("DEBUG: Final resolved avatar path being posted = $resolvedAvatarPath");
 
     if (userId != null) {
       try {
-        final response = await http.post(
+        await http.post(
           Uri.parse('http://localhost:8080/api/families'),
           headers: {
             'Content-Type': 'application/json',
@@ -82,13 +78,10 @@ class HomeReadyScreen extends StatelessWidget {
           }),
         );
 
-        print("DEBUG: Family creation response code = ${response.statusCode}");
-        print("DEBUG: Family creation response body = ${response.body}");
       } catch (e) {
         debugPrint("Error creating family on backend: $e");
       }
     } else {
-      print("ERROR: Could not resolve user ID for family creation.");
     }
 
     await prefs.setBool('has_family', true);

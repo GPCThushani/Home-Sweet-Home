@@ -19,7 +19,6 @@ class _HomeScreenState extends State<HomeScreen> {
   bool _isLoading = true;
   String _familyName = 'Our Family';
   String _inviteCode = 'Loading...';
-  String? _familyId;
   String? _familyAvatarPath;
   int _memberCount = 1;
 
@@ -49,7 +48,6 @@ class _HomeScreenState extends State<HomeScreen> {
           setState(() {
             _familyName = families[0]['name'] ?? 'Our Family';
             _inviteCode = families[0]['inviteCode'] ?? 'HSH-DEMO2026';
-            _familyId = families[0]['id'];
             _familyAvatarPath = families[0]['avatarPath'];
             _memberCount = families[0]['memberCount'] ?? 1;
             _isLoading = false;

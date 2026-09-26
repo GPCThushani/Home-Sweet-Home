@@ -499,8 +499,8 @@ class _GlobalTasksScreenState extends State<GlobalTasksScreen> {
             right: 24,
             child: FloatingActionButton(
               backgroundColor: const Color(0xFF4A8B71),
-              child: const Icon(Icons.add, color: Colors.white),
               onPressed: _openCreateTaskBottomSheet,
+              child: const Icon(Icons.add, color: Colors.white),
             ),
           ),
         ],
@@ -654,7 +654,7 @@ class _CreateTaskBottomSheetState extends State<CreateTaskBottomSheet> {
           const Text('Category Module', style: TextStyle(fontWeight: FontWeight.bold, color: Color(0xFF244032))),
           const SizedBox(height: 6),
           DropdownButtonFormField<String>(
-            value: _selectedModule,
+            initialValue: _selectedModule,
             items: _modules.map((m) => DropdownMenuItem(value: m, child: Text(m))).toList(),
             onChanged: (val) => setState(() => _selectedModule = val!),
             decoration: _dropdownDecoration(),
@@ -663,7 +663,7 @@ class _CreateTaskBottomSheetState extends State<CreateTaskBottomSheet> {
           const Text('Assign To Member', style: TextStyle(fontWeight: FontWeight.bold, color: Color(0xFF244032))),
           const SizedBox(height: 6),
           DropdownButtonFormField<String>(
-            value: _selectedAssigneeId,
+            initialValue: _selectedAssigneeId,
             hint: Text(widget.familyMembers.isEmpty ? 'No family members available' : 'Select family member'),
             items: widget.familyMembers
                 .where((member) => member['id'] != null)
@@ -904,7 +904,7 @@ class _EditTaskBottomSheetState extends State<EditTaskBottomSheet> {
           const Text('Category Module', style: TextStyle(fontWeight: FontWeight.bold, color: Color(0xFF244032))),
           const SizedBox(height: 6),
           DropdownButtonFormField<String>(
-            value: _modules.contains(_selectedModule) ? _selectedModule : 'OTHER',
+            initialValue: _modules.contains(_selectedModule) ? _selectedModule : 'OTHER',
             items: _modules.map((m) => DropdownMenuItem(value: m, child: Text(m))).toList(),
             onChanged: (val) => setState(() => _selectedModule = val!),
             decoration: _dropdownDecoration(),
@@ -913,7 +913,7 @@ class _EditTaskBottomSheetState extends State<EditTaskBottomSheet> {
           const Text('Assign To Member', style: TextStyle(fontWeight: FontWeight.bold, color: Color(0xFF244032))),
           const SizedBox(height: 6),
           DropdownButtonFormField<String>(
-            value: widget.familyMembers.any((m) => m['id']?.toString() == _selectedAssigneeId) ? _selectedAssigneeId : null,
+            initialValue: widget.familyMembers.any((m) => m['id']?.toString() == _selectedAssigneeId) ? _selectedAssigneeId : null,
             hint: Text(widget.familyMembers.isEmpty ? 'No family members' : 'Select family member'),
             items: widget.familyMembers
                 .where((member) => member['id'] != null)

@@ -23,12 +23,13 @@ public class SecurityConfig {
     @Bean
     public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
         http
-            .cors(Customizer.withDefaults()) // <--- CRITICAL: Enables CORS integration
+            .cors(Customizer.withDefaults()) // Enables CORS integration
             .csrf(csrf -> csrf.disable())
             .authorizeHttpRequests(auth -> auth
-                .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll() // <--- CRITICAL: Allow browser preflight checks
-                .requestMatchers("/api/users/**", "/error").permitAll() 
-                .requestMatchers("/api/families/**", "/api/tasks/**").authenticated()
+                .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll() // Allow browser preflight checks
+                // Explicitly permit users, error pages, family endpoints, and health endpoints
+                .requestMatchers("/api/users/**", "/error", "/api/families/**", "/api/health/**").permitAll() 
+                .requestMatchers("/api/tasks/**").authenticated()
                 .anyRequest().authenticated()
             )
             .sessionManagement(session -> session

@@ -1,5 +1,7 @@
+import 'dart:convert';
 import 'package:flutter/material.dart';
-import 'package:shared_preferences/shared_preferences.dart';
+import 'package:http/http.dart' as http;
+import '../../health/screens/health_screen.dart';
 
 class MoreScreen extends StatelessWidget {
   final String userEmail;
@@ -10,6 +12,8 @@ class MoreScreen extends StatelessWidget {
     required this.userEmail,
     required this.familyId,
   });
+
+  static const String baseUrl = 'http://localhost:8080/api';
 
   @override
   Widget build(BuildContext context) {
@@ -49,7 +53,7 @@ class MoreScreen extends StatelessWidget {
                 icon: Icons.medical_services_outlined,
                 iconColor: Colors.red.shade700,
                 title: 'Health',
-                onTap: () => _navigateTo(context, 'Health'),
+                onTap: () => _navigateToHealth(context),
               ),
               _buildDivider(),
               _buildMenuItem(
@@ -134,6 +138,51 @@ class MoreScreen extends StatelessWidget {
         ),
       ),
     );
+  }
+
+  Future<void> _navigateToHealth(BuildContext context) async {
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (_) => const Center(child: CircularProgressIndicator(color: Color(0xFF4A8B71))),
+    );
+
+    try {
+      final response = await http.get(
+        Uri.parse('$baseUrl/families/$familyId/members'),
+      );
+
+      if (!context.mounted) return;
+      Navigator.pop(context); // Dismiss loading dialog safely
+
+      if (response.statusCode == 200) {
+        final List<dynamic> data = jsonDecode(response.body);
+        final membersList = data.map((m) => m as Map<String, dynamic>).toList();
+
+        if (!context.mounted) return;
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (context) => HealthScreen(
+              userEmail: userEmail,
+              familyId: familyId,
+              initialFamilyMembers: membersList,
+            ),
+          ),
+        );
+      } else {
+        if (!context.mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Could not fetch family members for Health module.')),
+        );
+      }
+    } catch (e) {
+      if (!context.mounted) return;
+      Navigator.pop(context); // Dismiss loading dialog safely
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Connection error: $e')),
+      );
+    }
   }
 
   Widget _buildSectionContainer(List<Widget> children) {

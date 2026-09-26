@@ -148,7 +148,7 @@ class _CreateTaskBottomSheetState extends State<CreateTaskBottomSheet> {
           const Text('Category Module', style: TextStyle(fontWeight: FontWeight.bold, color: Color(0xFF244032))),
           const SizedBox(height: 6),
           DropdownButtonFormField<String>(
-            value: _selectedModule,
+            initialValue: _selectedModule,
             items: _modules.map((m) => DropdownMenuItem(value: m, child: Text(m))).toList(),
             onChanged: (val) => setState(() => _selectedModule = val!),
             decoration: _dropdownDecoration(),
@@ -157,7 +157,7 @@ class _CreateTaskBottomSheetState extends State<CreateTaskBottomSheet> {
           const Text('Assign To Member', style: TextStyle(fontWeight: FontWeight.bold, color: Color(0xFF244032))),
           const SizedBox(height: 6),
           DropdownButtonFormField<String>(
-            value: _selectedAssigneeId,
+            initialValue: _selectedAssigneeId,
             hint: Text(widget.familyMembers.isEmpty ? 'No family members available' : 'Select family member'),
             items: widget.familyMembers
                 .where((member) => member['id'] != null)
@@ -168,7 +168,7 @@ class _CreateTaskBottomSheetState extends State<CreateTaskBottomSheet> {
               final userObj = member['user'];
               final userEmail = userObj is Map ? userObj['email']?.toString().toLowerCase() : '';
               final nickname = member['nickname']?.toString() ?? '';
-              final role = member['role']?.toString()?.toUpperCase() ?? '';
+              final role = member['role']?.toString().toUpperCase() ?? '';
 
               // Explicit display name override logic
               String displayName;
