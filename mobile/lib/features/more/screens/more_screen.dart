@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import '../../health/screens/health_screen.dart';
+import '../../shopping/screens/shopping_screens.dart';
 
 class MoreScreen extends StatelessWidget {
   final String userEmail;
@@ -60,7 +61,7 @@ class MoreScreen extends StatelessWidget {
                 icon: Icons.shopping_bag_outlined,
                 iconColor: Colors.orange.shade700,
                 title: 'Shopping',
-                onTap: () => _navigateTo(context, 'Shopping'),
+                onTap: () => _navigateToShopping(context),
               ),
               _buildDivider(),
               _buildMenuItem(
@@ -267,4 +268,16 @@ class MoreScreen extends StatelessWidget {
       ),
     );
   }
+
+  void _navigateToShopping(BuildContext context) {
+  Navigator.push(
+    context,
+    MaterialPageRoute(
+      builder: (context) => ShoppingScreen(
+        userEmail: userEmail,
+        familyId: familyId,
+      ),
+    ),
+  );
+}
 }
