@@ -81,7 +81,7 @@ class _HealthScreenState extends State<HealthScreen> {
 
   String _getFriendlyName(Map<String, dynamic> member) {
     final nickname = member['nickname']?.toString().trim();
-    if (nickname != null && nickname.isNotEmpty && nickname.toLowerCase() != 'null') {
+    if (nickname != null && nickname.isNotEmpty && nickname.toLowerCase() != 'null' && nickname != 'Admin') {
       return nickname;
     }
 
@@ -103,24 +103,12 @@ class _HealthScreenState extends State<HealthScreen> {
 
   String _getFriendlyRole(Map<String, dynamic> member) {
     final role = member['role']?.toString().trim();
-    if (role != null && role.isNotEmpty && role.toUpperCase() != 'ADMIN') {
+    if (role != null && role.isNotEmpty) {
+      if (role.toUpperCase() == 'PARENT') return 'Parent';
+      if (role.toUpperCase() == 'CHILD') return 'Child';
       return role[0].toUpperCase() + role.substring(1).toLowerCase();
     }
-
-    if (member['user'] is Map) {
-      final user = Map<String, dynamic>.from(member['user']);
-      final userRole = user['role']?.toString().trim();
-      if (userRole != null && userRole.isNotEmpty && userRole.toUpperCase() != 'ADMIN') {
-        return userRole[0].toUpperCase() + userRole.substring(1).toLowerCase();
-      }
-    }
-
-    final relationship = member['relationship']?.toString().trim();
-    if (relationship != null && relationship.isNotEmpty) {
-      return relationship;
-    }
-
-    return 'Family Member';
+    return 'Family member';
   }
 
   bool get _womensHealthEnabled {
@@ -128,6 +116,7 @@ class _HealthScreenState extends State<HealthScreen> {
     return false;
   }
 
+  // --- ACCURATE ROLE/NAME-BASED AVATAR ASSET MAPPING ---
   String? _getAvatarUrl(Map<String, dynamic> member) {
     final candidates = [
       member['avatarPath'],
@@ -157,11 +146,36 @@ class _HealthScreenState extends State<HealthScreen> {
       }
     }
 
-    return null;
+    final name = _getFriendlyName(member).toLowerCase().trim();
+    final role = member['role']?.toString().toLowerCase().trim() ?? '';
+    final gender = member['gender']?.toString().toLowerCase().trim() ?? '';
+
+    if (name.contains('lily') || role.contains('daughter') || role.contains('girl')) {
+      return 'assets/images/family_members/daughter.jpg'; //[cite: 4]
+    }
+    if (role.contains('father') || role.contains('dad') || role.contains('parent')) {
+      return 'assets/images/family_members/father.jpg'; //[cite: 3, 4]
+    }
+    if (role.contains('mother') || role.contains('mom')) {
+      return 'assets/images/family_members/mother.jpg'; //[cite: 4]
+    }
+    if (role.contains('son') || role.contains('boy')) {
+      return 'assets/images/family_members/son.jpg'; //[cite: 4]
+    }
+    if (role.contains('grandfather') || role.contains('grandpa')) {
+      return 'assets/images/family_members/grandfather.jpg'; //[cite: 3]
+    }
+    if (role.contains('grandmother') || role.contains('grandma')) {
+      return 'assets/images/family_members/grandmother.jpg'; //[cite: 3]
+    }
+    if (gender == 'female') {
+      return 'assets/images/family_members/female.jpg'; //[cite: 4]
+    }
+    
+    return 'assets/images/family_members/male.jpg'; //[cite: 4]
   }
 
   Widget _buildAvatar(Map<String, dynamic> member, {double radius = 30}) {
-    final name = _getFriendlyName(member);
     final path = _getAvatarUrl(member);
 
     if (path != null && path.isNotEmpty) {
@@ -194,7 +208,7 @@ class _HealthScreenState extends State<HealthScreen> {
       radius: radius,
       backgroundColor: paleGreen,
       child: Text(
-        _getInitials(name),
+        _getInitials(_getFriendlyName(member)),
         style: TextStyle(
           fontSize: radius * 0.52,
           fontWeight: FontWeight.w800,
@@ -399,7 +413,6 @@ class _HealthScreenState extends State<HealthScreen> {
       body: SafeArea(
         child: Column(
           children: [
-            // --- RESTORED GREEN SHADOW HEADER CONTAINER ---
             Container(
               width: double.infinity,
               padding: const EdgeInsets.fromLTRB(16, 16, 16, 14),
@@ -491,7 +504,7 @@ class _HealthScreenState extends State<HealthScreen> {
 
   Widget _buildFamilyMemberSelector() {
     return Container(
-      height: 108,
+      height: 114,
       padding: const EdgeInsets.only(top: 5, bottom: 8),
       child: ListView.builder(
         scrollDirection: Axis.horizontal,
@@ -1443,7 +1456,7 @@ class _HealthScreenState extends State<HealthScreen> {
                     _inputField(dobController, 'Date of Birth', 'YYYY-MM-DD'),
                     const SizedBox(height: 10),
                     DropdownButtonFormField<String>(
-                      value: selectedBloodType,
+                      initialValue: selectedBloodType,
                       decoration: _inputDecoration('Blood Type'),
                       items: ['Unknown', 'A+', 'A-', 'B+', 'B-', 'AB+', 'AB-', 'O+', 'O-']
                           .map((value) => DropdownMenuItem(value: value, child: Text(value)))
@@ -1535,12 +1548,15 @@ class _HealthScreenState extends State<HealthScreen> {
                                 try {
                                   await _updateProfile(updated);
                                   if (!mounted) return;
+                                  // ignore: use_build_context_synchronously
                                   Navigator.pop(context);
                                   await _loadSelectedMember();
                                   if (!mounted) return;
+                                  // ignore: use_build_context_synchronously
                                   ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Health profile saved.')));
                                 } catch (_) {
                                   if (!mounted) return;
+                                  // ignore: use_build_context_synchronously
                                   ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Could not save the health profile.')));
                                 } finally {
                                   if (mounted) setState(() => _isSaving = false);
@@ -1631,13 +1647,16 @@ class _HealthScreenState extends State<HealthScreen> {
                         );
                         if (!mounted) return;
                         if (response.statusCode == 200 || response.statusCode == 201) {
+                          // ignore: use_build_context_synchronously
                           Navigator.pop(context);
                           await _loadSelectedMember();
                           if (!mounted) return;
+                          // ignore: use_build_context_synchronously
                           ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(existing == null ? 'Medicine added.' : 'Medicine updated.')));
                         }
                       } catch (_) {
                         if (!mounted) return;
+                        // ignore: use_build_context_synchronously
                         ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Could not save medicine.')));
                       }
                     },
@@ -1725,13 +1744,16 @@ class _HealthScreenState extends State<HealthScreen> {
                             );
                             if (!mounted) return;
                             if (response.statusCode == 200 || response.statusCode == 201) {
+                              // ignore: use_build_context_synchronously
                               Navigator.pop(context);
                               await _loadSelectedMember();
                               if (!mounted) return;
+                              // ignore: use_build_context_synchronously
                               ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(existing == null ? 'Appointment added.' : 'Appointment updated.')));
                             }
                           } catch (_) {
                             if (!mounted) return;
+                            // ignore: use_build_context_synchronously
                             ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Could not save appointment.')));
                           }
                         },
@@ -1773,7 +1795,7 @@ class _HealthScreenState extends State<HealthScreen> {
                     _inputField(titleController, 'Title', 'e.g. Blood Test'),
                     const SizedBox(height: 10),
                     DropdownButtonFormField<String>(
-                      value: category,
+                      initialValue: category,
                       decoration: _inputDecoration('Category'),
                       items: ['Medical Record', 'Blood Report', 'Prescription', 'Diagnosis', 'Hospital Visit', 'Other']
                           .map((item) => DropdownMenuItem(value: item, child: Text(item)))
@@ -1808,13 +1830,16 @@ class _HealthScreenState extends State<HealthScreen> {
                             );
                             if (!mounted) return;
                             if (response.statusCode == 200 || response.statusCode == 201) {
+                              // ignore: use_build_context_synchronously
                               Navigator.pop(context);
                               await _loadSelectedMember();
                               if (!mounted) return;
+                              // ignore: use_build_context_synchronously
                               ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(existing == null ? 'Health record saved.' : 'Health record updated.')));
                             }
                           } catch (_) {
                             if (!mounted) return;
+                            // ignore: use_build_context_synchronously
                             ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Could not save health record.')));
                           }
                         },
