@@ -7,6 +7,8 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 import java.time.LocalDate;
+import java.time.LocalDateTime;
+import java.time.temporal.ChronoUnit;
 import java.util.List;
 
 @RestController
@@ -16,11 +18,13 @@ public class HealthController {
 
     private final HealthProfileRepository profileRepository;
     private final MedicineRepository medicineRepository;
+    private final MedicineLogRepository medicineLogRepository;
     private final HealthAppointmentRepository appointmentRepository;
     private final HealthRecordRepository recordRepository;
     private final HealthDocumentRepository documentRepository;
     private final MenstrualCycleRepository cycleRepository;
-    // --- PROFILE ---
+    private final MenstrualEntryRepository menstrualEntryRepository;
+
     @GetMapping("/profile/{familyId}/{memberId}")
     public ResponseEntity<HealthProfile> getProfile(@PathVariable String familyId, @PathVariable String memberId) {
         return profileRepository.findByFamilyIdAndFamilyMemberId(familyId, memberId)
@@ -71,7 +75,6 @@ public class HealthController {
         return ResponseEntity.ok(profileRepository.save(profile));
     }
 
-    // --- MEDICINES ---
     @GetMapping("/medicines/{familyId}/{memberId}")
     public ResponseEntity<List<Medicine>> getMedicines(@PathVariable String familyId, @PathVariable String memberId) {
         return ResponseEntity.ok(medicineRepository.findByFamilyIdAndFamilyMemberIdAndActiveTrue(familyId, memberId));
@@ -112,7 +115,28 @@ public class HealthController {
         return ResponseEntity.noContent().build();
     }
 
-    // --- APPOINTMENTS ---
+    @GetMapping("/medicines/logs/{familyId}/{memberId}")
+    public ResponseEntity<List<MedicineLog>> getMedicineLogs(@PathVariable String familyId, @PathVariable String memberId) {
+        return ResponseEntity.ok(medicineLogRepository.findByFamilyIdAndFamilyMemberIdOrderByScheduledAtDesc(familyId, memberId));
+    }
+
+    @PostMapping("/medicines/logs")
+    public ResponseEntity<MedicineLog> logMedicine(@RequestBody MedicineLog log) {
+        if (log.getStatus() == null) log.setStatus("TAKEN");
+        log.setTakenAt(LocalDateTime.now());
+        if (log.getScheduledAt() == null) log.setScheduledAt(LocalDateTime.now());
+
+        if ("TAKEN".equalsIgnoreCase(log.getStatus())) {
+            medicineRepository.findById(log.getMedicineId()).ifPresent(med -> {
+                if (med.getRemainingQuantity() != null && med.getRemainingQuantity() > 0) {
+                    med.setRemainingQuantity(med.getRemainingQuantity() - 1);
+                    medicineRepository.save(med);
+                }
+            });
+        }
+        return ResponseEntity.ok(medicineLogRepository.save(log));
+    }
+
     @GetMapping("/appointments/{familyId}/{memberId}")
     public ResponseEntity<List<HealthAppointment>> getAppointments(@PathVariable String familyId, @PathVariable String memberId) {
         return ResponseEntity.ok(appointmentRepository.findByFamilyIdAndFamilyMemberIdOrderByAppointmentDateTimeAsc(familyId, memberId));
@@ -148,7 +172,6 @@ public class HealthController {
         return ResponseEntity.noContent().build();
     }
 
-    // --- RECORDS ---
     @GetMapping("/records/{familyId}/{memberId}")
     public ResponseEntity<List<HealthRecord>> getRecords(@PathVariable String familyId, @PathVariable String memberId) {
         return ResponseEntity.ok(recordRepository.findByFamilyIdAndFamilyMemberIdOrderByRecordDateDesc(familyId, memberId));
@@ -181,7 +204,6 @@ public class HealthController {
         return ResponseEntity.noContent().build();
     }
 
-    // --- DOCUMENTS ---
     @GetMapping("/documents/{familyId}/{memberId}")
     public ResponseEntity<List<HealthDocument>> getDocuments(@PathVariable String familyId, @PathVariable String memberId) {
         return ResponseEntity.ok(documentRepository.findByFamilyIdAndFamilyMemberIdOrderByUploadedDateDesc(familyId, memberId));
@@ -202,7 +224,6 @@ public class HealthController {
         return ResponseEntity.noContent().build();
     }
 
-    // --- WOMEN'S HEALTH ---
     @GetMapping("/womens-health/cycles/{familyId}/{memberId}")
     public ResponseEntity<List<MenstrualCycle>> getCycles(@PathVariable String familyId, @PathVariable String memberId) {
         return ResponseEntity.ok(cycleRepository.findByFamilyIdAndFamilyMemberIdOrderByStartDateDesc(familyId, memberId));
@@ -221,10 +242,24 @@ public class HealthController {
         return cycleRepository.findById(cycleId)
                 .map(cycle -> {
                     cycle.setEndDate(endDate);
-                    long periodLength = java.time.temporal.ChronoUnit.DAYS.between(cycle.getStartDate(), endDate) + 1;
+                    long periodLength = ChronoUnit.DAYS.between(cycle.getStartDate(), endDate) + 1;
                     cycle.setPeriodLength((int) periodLength);
                     return ResponseEntity.ok(cycleRepository.save(cycle));
                 })
                 .orElse(ResponseEntity.notFound().build());
+    }
+
+    @PostMapping("/womens-health/entries")
+    public ResponseEntity<MenstrualEntry> addMenstrualEntry(@RequestBody MenstrualEntry entry) {
+        return ResponseEntity.ok(menstrualEntryRepository.save(entry));
+    }
+
+    @GetMapping("/womens-health/entries/{familyId}/{memberId}")
+    public ResponseEntity<List<MenstrualEntry>> getMenstrualEntries(
+            @PathVariable String familyId, 
+            @PathVariable String memberId,
+            @RequestParam LocalDate start,
+            @RequestParam LocalDate end) {
+        return ResponseEntity.ok(menstrualEntryRepository.findByFamilyIdAndFamilyMemberIdAndDateBetween(familyId, memberId, start, end));
     }
 }

@@ -6,7 +6,6 @@ import 'package:shared_preferences/shared_preferences.dart';
 class GlobalTasksScreen extends StatefulWidget {
   final String userEmail;
   final String familyId;
-
   const GlobalTasksScreen({
     super.key,
     required this.userEmail,
@@ -19,10 +18,19 @@ class GlobalTasksScreen extends StatefulWidget {
 
 class _GlobalTasksScreenState extends State<GlobalTasksScreen> {
   static const String _baseUrl = 'http://localhost:8080';
-
   bool _isLoading = true;
   List<Map<String, dynamic>> _tasks = [];
   List<Map<String, dynamic>> _familyMembers = [];
+  int _currentNavIndex = 3; // Tasks tab index
+
+  static const Color ivory = Color(0xFFFAF8F3);
+  static const Color white = Colors.white;
+  static const Color forest = Color(0xFF355C4A);
+  static const Color green = Color(0xFF4A8B71);
+  static const Color paleGreen = Color(0xFFE5EEE7);
+  static const Color textDark = Color(0xFF244032);
+  static const Color textSecondary = Color(0xFF65716B);
+  static const Color border = Color(0xFFE5E1D9);
 
   @override
   void initState() {
@@ -40,7 +48,6 @@ class _GlobalTasksScreenState extends State<GlobalTasksScreen> {
   Future<Map<String, String>> _headers() async {
     final prefs = await SharedPreferences.getInstance();
     final jwtToken = prefs.getString('jwt_token');
-
     return {
       'Content-Type': 'application/json',
       if (jwtToken != null && jwtToken.isNotEmpty) 'Authorization': 'Bearer $jwtToken',
@@ -52,7 +59,6 @@ class _GlobalTasksScreenState extends State<GlobalTasksScreen> {
       final headers = await _headers();
       final url = Uri.parse('$_baseUrl/api/tasks/family/${widget.familyId}');
       final response = await http.get(url, headers: headers);
-
       if (response.statusCode == 200) {
         final decoded = jsonDecode(response.body);
         if (decoded is List && mounted) {
@@ -74,7 +80,6 @@ class _GlobalTasksScreenState extends State<GlobalTasksScreen> {
     try {
       final headers = await _headers();
       final url = Uri.parse('$_baseUrl/api/families/${widget.familyId}/members');
-      
       final response = await http.get(url, headers: headers);
 
       if (response.statusCode == 200) {
@@ -95,12 +100,11 @@ class _GlobalTasksScreenState extends State<GlobalTasksScreen> {
       final headers = await _headers();
       final url = Uri.parse('$_baseUrl/api/tasks/$taskId/complete');
       final response = await http.put(url, headers: headers);
-
       if (response.statusCode == 200) {
         await _fetchFamilyTasks();
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Task moved to completed!'), backgroundColor: Color(0xFF4A8B71)),
+            const SnackBar(content: Text('Task moved to completed!'), backgroundColor: green),
           );
         }
       }
@@ -114,7 +118,6 @@ class _GlobalTasksScreenState extends State<GlobalTasksScreen> {
       final headers = await _headers();
       final url = Uri.parse('$_baseUrl/api/tasks/$taskId');
       final response = await http.delete(url, headers: headers);
-
       if (response.statusCode == 200 || response.statusCode == 204) {
         await _fetchFamilyTasks();
         if (mounted) {
@@ -128,12 +131,10 @@ class _GlobalTasksScreenState extends State<GlobalTasksScreen> {
     }
   }
 
-  // Robust helper method that correctly distinguishes Father from Daughter
   String _getFriendlyName(dynamic memberData) {
     if (memberData == null) {
       return widget.userEmail.toLowerCase().contains('perera') ? 'Father' : 'Daughter';
     }
-    
     final userMap = memberData is Map && memberData.containsKey('user') ? memberData['user'] : null;
     if (userMap is Map) {
       final email = (userMap['email'] ?? '').toString().toLowerCase();
@@ -141,7 +142,7 @@ class _GlobalTasksScreenState extends State<GlobalTasksScreen> {
         return 'Father';
       }
     }
-    
+
     if (memberData is Map) {
       final email = (memberData['email'] ?? '').toString().toLowerCase();
       final nickname = (memberData['nickname'] ?? memberData['name'] ?? '').toString().toLowerCase();
@@ -169,7 +170,7 @@ class _GlobalTasksScreenState extends State<GlobalTasksScreen> {
         return Colors.blueGrey.shade600;
       case 'CHORES':
       default:
-        return const Color(0xFF4A8B71);
+        return green;
     }
   }
 
@@ -238,284 +239,328 @@ class _GlobalTasksScreenState extends State<GlobalTasksScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return DefaultTabController(
-      length: 3,
-      child: Stack(
-        children: [
-          Container(
-            color: const Color(0xFFF8FAF9),
-            child: SafeArea(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Padding(
-                    padding: const EdgeInsets.fromLTRB(20, 16, 20, 0),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        const Text(
-                          'Household Tasks',
-                          style: TextStyle(
-                            color: Color(0xFF244032),
-                            fontWeight: FontWeight.bold,
-                            fontSize: 22,
-                          ),
-                        ),
-                        const SizedBox(height: 12),
-                        const TabBar(
-                          isScrollable: true,
-                          labelColor: Color(0xFF4A8B71),
-                          unselectedLabelColor: Colors.grey,
-                          indicatorColor: Color(0xFF4A8B71),
-                          indicatorWeight: 3,
-                          labelStyle: TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
-                          tabs: [
-                            Tab(text: 'All'),
-                            Tab(text: 'My Tasks'),
-                            Tab(text: 'Completed'),
-                          ],
-                        ),
-                      ],
+    return Scaffold(
+      backgroundColor: ivory,
+      body: SafeArea(
+        child: DefaultTabController(
+          length: 3,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.fromLTRB(16, 16, 16, 14),
+                decoration: BoxDecoration(
+                  color: paleGreen.withValues(alpha: 0.7),
+                  borderRadius: const BorderRadius.vertical(bottom: Radius.circular(20)),
+                  border: Border(bottom: BorderSide(color: green.withValues(alpha: 0.2), width: 1.5)),
+                  boxShadow: [
+                    BoxShadow(
+                      color: green.withValues(alpha: 0.06),
+                      blurRadius: 10,
+                      offset: const Offset(0, 4),
                     ),
-                  ),
-                  const Divider(height: 1, thickness: 1, color: Color(0xFFE5E7EB)),
-                  Expanded(
-                    child: _isLoading
-                        ? const Center(child: CircularProgressIndicator(color: Color(0xFF4A8B71)))
-                        : TabBarView(
-                            children: List.generate(3, (tabIndex) {
-                              final tasks = _filterTasks(tabIndex);
-                              if (tasks.isEmpty) {
-                                return Center(
-                                  child: Text(
-                                    tabIndex == 2 ? 'No completed tasks yet.' : 'No tasks found in this view.',
-                                    style: TextStyle(color: Colors.grey.shade500, fontSize: 14),
-                                  ),
-                                );
-                              }
-                              return ListView.builder(
-                                padding: const EdgeInsets.fromLTRB(20, 20, 20, 90),
-                                itemCount: tasks.length,
-                                itemBuilder: (context, index) {
-                                  final task = tasks[index];
-                                  final String title = task['title'] ?? 'Untitled';
-                                  final String description = task['description'] ?? '';
-                                  final String module = task['originModule'] ?? 'CHORES';
-                                  final String taskId = task['id'].toString();
-                                  final String status = task['status'] ?? 'PENDING';
-                                  final bool isCompleted = status.toUpperCase() == 'COMPLETED';
-                                  final iconColor = _getModuleColor(module);
-
-                                  // Resolve assignee and completer names
-                                  final assigneeObj = task['assignedTo'];
-                                  String assigneeName = _getFriendlyName(assigneeObj);
-
-                                  // Format due date & time cleanly
-                                  String dueDateStr = '';
-                                  if (task['dueDate'] != null) {
-                                    try {
-                                      final dueDt = DateTime.parse(task['dueDate'].toString()).toLocal();
-                                      final day = dueDt.day.toString().padLeft(2, '0');
-                                      final month = dueDt.month.toString().padLeft(2, '0');
-                                      final year = dueDt.year;
-                                      final hour = dueDt.hour.toString().padLeft(2, '0');
-                                      final minute = dueDt.minute.toString().padLeft(2, '0');
-                                      dueDateStr = 'Due: $day/$month/$year at $hour:$minute';
-                                    } catch (_) {}
-                                  }
-
-                                  String completedText = 'Completed';
-                                  if (isCompleted) {
-                                    String timeStr = '';
-                                    if (task['completedAt'] != null) {
-                                      try {
-                                        final localDt = DateTime.parse(task['completedAt'].toString()).toLocal();
-                                        final hour = localDt.hour.toString().padLeft(2, '0');
-                                        final minute = localDt.minute.toString().padLeft(2, '0');
-                                        timeStr = ' ($hour:$minute)';
-                                      } catch (_) {}
-                                    }
-                                    
-                                    final completerObj = task['completedBy'];
-                                    final completerName = _getFriendlyName(completerObj);
-
-                                    completedText = 'Assigned: $assigneeName | Done: $completerName$timeStr';
-                                  }
-
-                                  return Container(
-                                    margin: const EdgeInsets.only(bottom: 12),
-                                    padding: const EdgeInsets.all(16),
-                                    decoration: BoxDecoration(
-                                      color: Colors.white,
-                                      borderRadius: BorderRadius.circular(16),
-                                      border: Border.all(color: Colors.grey.shade200, width: 1.5),
-                                      boxShadow: [
-                                        BoxShadow(
-                                          color: Colors.black.withValues(alpha: 0.02),
-                                          blurRadius: 6,
-                                          offset: const Offset(0, 3),
-                                        ),
-                                      ],
-                                    ),
-                                    child: Column(
-                                      crossAxisAlignment: CrossAxisAlignment.start,
-                                      children: [
-                                        Row(
-                                          children: [
-                                            Container(
-                                              padding: const EdgeInsets.all(8),
-                                              decoration: BoxDecoration(
-                                                color: iconColor.withValues(alpha: 0.1),
-                                                borderRadius: BorderRadius.circular(10),
-                                              ),
-                                              child: Icon(_getModuleIcon(module), color: iconColor, size: 18),
-                                            ),
-                                            const SizedBox(width: 12),
-                                            Expanded(
-                                              child: Text(
-                                                title,
-                                                style: TextStyle(
-                                                  fontSize: 15,
-                                                  fontWeight: FontWeight.bold,
-                                                  color: const Color(0xFF244032),
-                                                  decoration: isCompleted ? TextDecoration.lineThrough : null,
-                                                ),
-                                              ),
-                                            ),
-                                            InkWell(
-                                              onTap: () => _openEditTaskBottomSheet(task),
-                                              child: Padding(
-                                                padding: const EdgeInsets.all(4.0),
-                                                child: Icon(Icons.edit_outlined, size: 18, color: Colors.grey.shade600),
-                                              ),
-                                            ),
-                                            const SizedBox(width: 8),
-                                            InkWell(
-                                              onTap: () => _deleteTask(taskId),
-                                              child: Padding(
-                                                padding: const EdgeInsets.all(4.0),
-                                                child: Icon(Icons.delete_outline_rounded, size: 18, color: Colors.red.shade400),
-                                              ),
-                                            ),
-                                          ],
-                                        ),
-                                        const SizedBox(height: 8),
-                                        Row(
-                                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                                          children: [
-                                            Text(
-                                              module,
-                                              style: TextStyle(fontSize: 12, color: Colors.grey.shade500, fontWeight: FontWeight.w600),
-                                            ),
-                                            if (dueDateStr.isNotEmpty)
-                                              Text(
-                                                dueDateStr,
-                                                style: TextStyle(fontSize: 12, color: Colors.grey.shade600, fontWeight: FontWeight.w500),
-                                              ),
-                                          ],
-                                        ),
-                                        if (description.trim().isNotEmpty) ...[
-                                          const SizedBox(height: 6),
-                                          Text(
-                                            description,
-                                            style: TextStyle(fontSize: 13, color: Colors.grey.shade700),
-                                          ),
-                                        ],
-                                        const SizedBox(height: 12),
-                                        Row(
-                                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                                          children: [
-                                            Expanded(
-                                              child: Container(
-                                                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                                                decoration: BoxDecoration(
-                                                  color: const Color(0xFFE8F2ED),
-                                                  borderRadius: BorderRadius.circular(6),
-                                                ),
-                                                child: Text(
-                                                  isCompleted ? completedText : assigneeName,
-                                                  style: const TextStyle(fontSize: 11, color: Color(0xFF4A8B71), fontWeight: FontWeight.bold),
-                                                  overflow: TextOverflow.ellipsis,
-                                                ),
-                                              ),
-                                            ),
-                                            const SizedBox(width: 8),
-                                            if (!isCompleted)
-                                              InkWell(
-                                                onTap: () => _completeTask(taskId),
-                                                borderRadius: BorderRadius.circular(8),
-                                                child: Container(
-                                                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                                                  decoration: BoxDecoration(
-                                                    color: const Color(0xFF4A8B71).withValues(alpha: 0.1),
-                                                    borderRadius: BorderRadius.circular(8),
-                                                    border: Border.all(color: const Color(0xFF4A8B71)),
-                                                  ),
-                                                  child: const Row(
-                                                    mainAxisSize: MainAxisSize.min,
-                                                    children: [
-                                                      Icon(Icons.check_circle_outline_rounded, size: 14, color: Color(0xFF4A8B71)),
-                                                      SizedBox(width: 4),
-                                                      Text(
-                                                        'Mark Done',
-                                                        style: TextStyle(
-                                                          fontSize: 11,
-                                                          fontWeight: FontWeight.bold,
-                                                          color: Color(0xFF4A8B71),
-                                                        ),
-                                                      ),
-                                                    ],
-                                                  ),
-                                                ),
-                                              )
-                                            else
-                                              Container(
-                                                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                                                decoration: BoxDecoration(
-                                                  color: Colors.grey.shade100,
-                                                  borderRadius: BorderRadius.circular(8),
-                                                ),
-                                                child: Text(
-                                                  'Completed',
-                                                  style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.grey.shade600),
-                                                ),
-                                              ),
-                                          ],
-                                        ),
-                                      ],
-                                    ),
-                                  );
-                                },
-                              );
-                            }),
-                          ),
-                  ),
-                ],
+                  ],
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text(
+                      'Household Tasks',
+                      style: TextStyle(
+                        color: textDark,
+                        fontWeight: FontWeight.w800,
+                        fontSize: 20,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    const Text('Manage and assign family responsibilities.', style: TextStyle(color: textSecondary, fontSize: 11)),
+                  ],
+                ),
               ),
-            ),
+              const SizedBox(height: 12),
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 16),
+                child: Container(
+                  height: 46,
+                  padding: const EdgeInsets.all(4),
+                  decoration: BoxDecoration(
+                    color: white,
+                    borderRadius: BorderRadius.circular(14),
+                    border: Border.all(color: border),
+                  ),
+                  child: TabBar(
+                    isScrollable: false, // Ensures tabs evenly stretch across container width
+                    indicatorSize: TabBarIndicatorSize.tab,
+                    indicator: BoxDecoration(
+                      color: forest,
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    labelColor: white,
+                    unselectedLabelColor: textSecondary,
+                    dividerColor: Colors.transparent,
+                    labelStyle: const TextStyle(fontWeight: FontWeight.w700, fontSize: 12),
+                    tabs: const [
+                      Tab(text: 'All Tasks'),
+                      Tab(text: 'My Tasks'),
+                      Tab(text: 'Completed'),
+                    ],
+                  ),
+                ),
+              ),
+              const SizedBox(height: 8),
+              Expanded(
+                child: _isLoading
+                    ? const Center(child: CircularProgressIndicator(color: green))
+                    : TabBarView(
+                        children: List.generate(3, (tabIndex) {
+                          final tasks = _filterTasks(tabIndex);
+                          if (tasks.isEmpty) {
+                            return Center(
+                              child: Text(
+                                tabIndex == 2 ? 'No completed tasks yet.' : 'No tasks found in this view.',
+                                style: TextStyle(color: Colors.grey.shade500, fontSize: 14),
+                              ),
+                            );
+                          }
+                          return ListView.builder(
+                            padding: const EdgeInsets.fromLTRB(16, 12, 16, 90),
+                            itemCount: tasks.length,
+                            itemBuilder: (context, index) {
+                              final task = tasks[index];
+                              final String title = task['title'] ?? 'Untitled';
+                              final String description = task['description'] ?? '';
+                              final String module = task['originModule'] ?? 'CHORES';
+                              final String taskId = task['id'].toString();
+                              final String status = task['status'] ?? 'PENDING';
+                              final bool isCompleted = status.toUpperCase() == 'COMPLETED';
+                              final iconColor = _getModuleColor(module);
+                              
+                              final assigneeObj = task['assignedTo'];
+                              String assigneeName = _getFriendlyName(assigneeObj);
+
+                              String dueDateStr = '';
+                              if (task['dueDate'] != null) {
+                                try {
+                                  final dueDt = DateTime.parse(task['dueDate'].toString()).toLocal();
+                                  final day = dueDt.day.toString().padLeft(2, '0');
+                                  final month = dueDt.month.toString().padLeft(2, '0');
+                                  final year = dueDt.year;
+                                  final hour = dueDt.hour.toString().padLeft(2, '0');
+                                  final minute = dueDt.minute.toString().padLeft(2, '0');
+                                  dueDateStr = 'Due: $day/$month/$year at $hour:$minute';
+                                } catch (_) {}
+                              }
+
+                              String completedText = 'Completed';
+                              if (isCompleted) {
+                                String timeStr = '';
+                                if (task['completedAt'] != null) {
+                                  try {
+                                    final localDt = DateTime.parse(task['completedAt'].toString()).toLocal();
+                                    final hour = localDt.hour.toString().padLeft(2, '0');
+                                    final minute = localDt.minute.toString().padLeft(2, '0');
+                                    timeStr = ' ($hour:$minute)';
+                                  } catch (_) {}
+                                }
+
+                                final completerObj = task['completedBy'];
+                                final completerName = _getFriendlyName(completerObj);
+
+                                completedText = 'Assigned: $assigneeName | Done: $completerName$timeStr';
+                              }
+
+                              return Container(
+                                margin: const EdgeInsets.only(bottom: 12),
+                                padding: const EdgeInsets.all(16),
+                                decoration: BoxDecoration(
+                                  color: white,
+                                  borderRadius: BorderRadius.circular(16),
+                                  border: Border.all(color: border, width: 1.5),
+                                  boxShadow: [
+                                    BoxShadow(
+                                      color: Colors.black.withValues(alpha: 0.02),
+                                      blurRadius: 6,
+                                      offset: const Offset(0, 3),
+                                    ),
+                                  ],
+                                ),
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Row(
+                                      children: [
+                                        Container(
+                                          padding: const EdgeInsets.all(8),
+                                          decoration: BoxDecoration(
+                                            color: iconColor.withValues(alpha: 0.1),
+                                            borderRadius: BorderRadius.circular(10),
+                                          ),
+                                          child: Icon(_getModuleIcon(module), color: iconColor, size: 18),
+                                        ),
+                                        const SizedBox(width: 12),
+                                        Expanded(
+                                          child: Text(
+                                            title,
+                                            style: TextStyle(
+                                              fontSize: 15,
+                                              fontWeight: FontWeight.bold,
+                                              color: textDark,
+                                              decoration: isCompleted ? TextDecoration.lineThrough : null,
+                                            ),
+                                          ),
+                                        ),
+                                        InkWell(
+                                          onTap: () => _openEditTaskBottomSheet(task),
+                                          child: Padding(
+                                            padding: const EdgeInsets.all(4.0),
+                                            child: Icon(Icons.edit_outlined, size: 18, color: Colors.grey.shade600),
+                                          ),
+                                        ),
+                                        const SizedBox(width: 8),
+                                        InkWell(
+                                          onTap: () => _deleteTask(taskId),
+                                          child: Padding(
+                                            padding: const EdgeInsets.all(4.0),
+                                            child: Icon(Icons.delete_outline_rounded, size: 18, color: Colors.red.shade400),
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                    const SizedBox(height: 8),
+                                    Row(
+                                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                      children: [
+                                        Text(
+                                          module,
+                                          style: TextStyle(fontSize: 12, color: Colors.grey.shade500, fontWeight: FontWeight.w600),
+                                        ),
+                                        if (dueDateStr.isNotEmpty)
+                                          Text(
+                                            dueDateStr,
+                                            style: TextStyle(fontSize: 12, color: Colors.grey.shade600, fontWeight: FontWeight.w500),
+                                          ),
+                                      ],
+                                    ),
+                                    if (description.trim().isNotEmpty) ...[
+                                      const SizedBox(height: 6),
+                                      Text(
+                                        description,
+                                        style: TextStyle(fontSize: 13, color: Colors.grey.shade700),
+                                      ),
+                                    ],
+                                    const SizedBox(height: 12),
+                                    Row(
+                                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                      children: [
+                                        Expanded(
+                                          child: Container(
+                                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                            decoration: BoxDecoration(
+                                              color: paleGreen,
+                                              borderRadius: BorderRadius.circular(6),
+                                            ),
+                                            child: Text(
+                                              isCompleted ? completedText : assigneeName,
+                                              style: const TextStyle(fontSize: 11, color: green, fontWeight: FontWeight.bold),
+                                              overflow: TextOverflow.ellipsis,
+                                            ),
+                                          ),
+                                        ),
+                                        const SizedBox(width: 8),
+                                        if (!isCompleted)
+                                          InkWell(
+                                            onTap: () => _completeTask(taskId),
+                                            borderRadius: BorderRadius.circular(8),
+                                            child: Container(
+                                              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                                              decoration: BoxDecoration(
+                                                color: green.withValues(alpha: 0.1),
+                                                borderRadius: BorderRadius.circular(8),
+                                                border: Border.all(color: green),
+                                              ),
+                                              child: const Row(
+                                                mainAxisSize: MainAxisSize.min,
+                                                children: [
+                                                  Icon(Icons.check_circle_outline_rounded, size: 14, color: green),
+                                                  SizedBox(width: 4),
+                                                  Text(
+                                                    'Mark Done',
+                                                    style: TextStyle(
+                                                      fontSize: 11,
+                                                      fontWeight: FontWeight.bold,
+                                                      color: green,
+                                                    ),
+                                                  ),
+                                                ],
+                                              ),
+                                            ),
+                                          )
+                                        else
+                                          Container(
+                                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                                            decoration: BoxDecoration(
+                                              color: Colors.grey.shade100,
+                                              borderRadius: BorderRadius.circular(8),
+                                            ),
+                                            child: Text(
+                                              'Completed',
+                                              style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.grey.shade600),
+                                            ),
+                                          ),
+                                      ],
+                                    ),
+                                  ],
+                                ),
+                              );
+                            },
+                          );
+                        }),
+                      ),
+              ),
+            ],
           ),
-          Positioned(
-            bottom: 24,
-            right: 24,
-            child: FloatingActionButton(
-              backgroundColor: const Color(0xFF4A8B71),
-              onPressed: _openCreateTaskBottomSheet,
-              child: const Icon(Icons.add, color: Colors.white),
-            ),
-          ),
-        ],
+        ),
+      ),
+      floatingActionButton: FloatingActionButton(
+        backgroundColor: forest,
+        foregroundColor: white,
+        onPressed: _openCreateTaskBottomSheet,
+        child: const Icon(Icons.add),
+      ),
+      bottomNavigationBar: Container(
+        decoration: BoxDecoration(color: white, border: Border(top: BorderSide(color: border))),
+        child: BottomNavigationBar(
+          currentIndex: _currentNavIndex,
+          type: BottomNavigationBarType.fixed,
+          backgroundColor: white,
+          selectedItemColor: green,
+          unselectedItemColor: Colors.grey.shade400,
+          elevation: 0,
+          items: const [
+            BottomNavigationBarItem(icon: Icon(Icons.home_outlined), activeIcon: Icon(Icons.home_rounded), label: 'Home'),
+            BottomNavigationBarItem(icon: Icon(Icons.group_outlined), activeIcon: Icon(Icons.group_rounded), label: 'Family'),
+            BottomNavigationBarItem(icon: Icon(Icons.calendar_today_outlined), activeIcon: Icon(Icons.calendar_today_rounded), label: 'Calendar'),
+            BottomNavigationBarItem(icon: Icon(Icons.task_outlined), activeIcon: Icon(Icons.task_rounded), label: 'Tasks'),
+            BottomNavigationBarItem(icon: Icon(Icons.menu_outlined), activeIcon: Icon(Icons.menu_rounded), label: 'More'),
+          ],
+          onTap: (index) {
+            setState(() => _currentNavIndex = index);
+            if (index == 0 || index == 1 || index == 2 || index == 4) {
+              Navigator.pop(context);
+            }
+          },
+        ),
       ),
     );
   }
 }
 
-// --- CREATE TASK BOTTOM SHEET ---
 class CreateTaskBottomSheet extends StatefulWidget {
   final String familyId;
   final List<Map<String, dynamic>> familyMembers;
   final VoidCallback onTaskCreated;
   final String Function(dynamic) getFriendlyName;
-
   const CreateTaskBottomSheet({
     super.key,
     required this.familyId,
@@ -523,23 +568,19 @@ class CreateTaskBottomSheet extends StatefulWidget {
     required this.onTaskCreated,
     required this.getFriendlyName,
   });
-
   @override
   State<CreateTaskBottomSheet> createState() => _CreateTaskBottomSheetState();
 }
 
 class _CreateTaskBottomSheetState extends State<CreateTaskBottomSheet> {
   static const String _baseUrl = 'http://localhost:8080';
-
   final _titleController = TextEditingController();
   final _descriptionController = TextEditingController();
-  
   String _selectedModule = 'SHOPPING';
   String? _selectedAssigneeId;
   DateTime? _selectedDate;
   TimeOfDay? _selectedTime;
   bool _isSaving = false;
-
   final List<String> _modules = ['SHOPPING', 'CHORES', 'HEALTH', 'PETS', 'FINANCE', 'OTHER'];
 
   @override
@@ -592,7 +633,6 @@ class _CreateTaskBottomSheetState extends State<CreateTaskBottomSheet> {
   Future<void> _submitTask() async {
     final title = _titleController.text.trim();
     final description = _descriptionController.text.trim();
-
     if (title.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text("Please enter a task title."), backgroundColor: Colors.red),
@@ -747,14 +787,12 @@ class _CreateTaskBottomSheetState extends State<CreateTaskBottomSheet> {
   }
 }
 
-// --- EDIT TASK BOTTOM SHEET ---
 class EditTaskBottomSheet extends StatefulWidget {
   final String familyId;
   final List<Map<String, dynamic>> familyMembers;
   final Map<String, dynamic> task;
   final VoidCallback onTaskUpdated;
   final String Function(dynamic) getFriendlyName;
-
   const EditTaskBottomSheet({
     super.key,
     required this.familyId,
@@ -763,14 +801,12 @@ class EditTaskBottomSheet extends StatefulWidget {
     required this.onTaskUpdated,
     required this.getFriendlyName,
   });
-
   @override
   State<EditTaskBottomSheet> createState() => _EditTaskBottomSheetState();
 }
 
 class _EditTaskBottomSheetState extends State<EditTaskBottomSheet> {
   static const String _baseUrl = 'http://localhost:8080';
-
   late final TextEditingController _titleController;
   late final TextEditingController _descriptionController;
   late String _selectedModule;
@@ -778,7 +814,6 @@ class _EditTaskBottomSheetState extends State<EditTaskBottomSheet> {
   DateTime? _selectedDate;
   TimeOfDay? _selectedTime;
   bool _isSaving = false;
-
   final List<String> _modules = ['SHOPPING', 'CHORES', 'HEALTH', 'PETS', 'FINANCE', 'OTHER'];
 
   @override
@@ -787,7 +822,6 @@ class _EditTaskBottomSheetState extends State<EditTaskBottomSheet> {
     _titleController = TextEditingController(text: widget.task['title'] ?? '');
     _descriptionController = TextEditingController(text: widget.task['description'] ?? '');
     _selectedModule = widget.task['originModule'] ?? 'OTHER';
-
     final assignedTo = widget.task['assignedTo'];
     if (assignedTo is Map) {
       _selectedAssigneeId = assignedTo['id']?.toString();
@@ -848,7 +882,6 @@ class _EditTaskBottomSheetState extends State<EditTaskBottomSheet> {
   Future<void> _updateTask() async {
     final title = _titleController.text.trim();
     final description = _descriptionController.text.trim();
-
     if (title.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text("Please enter a task title."), backgroundColor: Colors.red),
@@ -997,11 +1030,9 @@ class _EditTaskBottomSheetState extends State<EditTaskBottomSheet> {
   }
 }
 
-// --- SHARED BOTTOM SHEET CONTAINER ---
 class TaskFormContainer extends StatelessWidget {
   final Widget child;
   const TaskFormContainer({super.key, required this.child});
-
   @override
   Widget build(BuildContext context) {
     return Container(

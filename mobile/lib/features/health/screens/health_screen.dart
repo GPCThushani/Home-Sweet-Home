@@ -37,6 +37,9 @@ class _HealthScreenState extends State<HealthScreen> {
   List<dynamic> _records = [];
   List<dynamic> _documents = [];
   List<dynamic> _cycles = [];
+  List<dynamic> _symptomEntries = [];
+
+  DateTime _displayedMonth = DateTime.now();
 
   static const Color ivory = Color(0xFFFAF8F3);
   static const Color white = Colors.white;
@@ -49,6 +52,8 @@ class _HealthScreenState extends State<HealthScreen> {
   static const Color border = Color(0xFFE5E1D9);
   static const Color terracotta = Color(0xFFC98268);
   static const Color peach = Color(0xFFF4DDD2);
+  static const Color periodRed = Color(0xFFE94F64);
+  static const Color fertileBlue = Color(0xFF6C63FF);
 
   @override
   void initState() {
@@ -116,7 +121,6 @@ class _HealthScreenState extends State<HealthScreen> {
     return false;
   }
 
-  // --- ACCURATE ROLE/NAME-BASED AVATAR ASSET MAPPING ---
   String? _getAvatarUrl(Map<String, dynamic> member) {
     final candidates = [
       member['avatarPath'],
@@ -151,28 +155,28 @@ class _HealthScreenState extends State<HealthScreen> {
     final gender = member['gender']?.toString().toLowerCase().trim() ?? '';
 
     if (name.contains('lily') || role.contains('daughter') || role.contains('girl')) {
-      return 'assets/images/family_members/daughter.jpg'; //[cite: 4]
+      return 'assets/images/family_members/daughter.jpg';
     }
     if (role.contains('father') || role.contains('dad') || role.contains('parent')) {
-      return 'assets/images/family_members/father.jpg'; //[cite: 3, 4]
+      return 'assets/images/family_members/father.jpg';
     }
     if (role.contains('mother') || role.contains('mom')) {
-      return 'assets/images/family_members/mother.jpg'; //[cite: 4]
+      return 'assets/images/family_members/mother.jpg';
     }
     if (role.contains('son') || role.contains('boy')) {
-      return 'assets/images/family_members/son.jpg'; //[cite: 4]
+      return 'assets/images/family_members/son.jpg';
     }
     if (role.contains('grandfather') || role.contains('grandpa')) {
-      return 'assets/images/family_members/grandfather.jpg'; //[cite: 3]
+      return 'assets/images/family_members/grandfather.jpg';
     }
     if (role.contains('grandmother') || role.contains('grandma')) {
-      return 'assets/images/family_members/grandmother.jpg'; //[cite: 3]
+      return 'assets/images/family_members/grandmother.jpg';
     }
     if (gender == 'female') {
-      return 'assets/images/family_members/female.jpg'; //[cite: 4]
+      return 'assets/images/family_members/female.jpg';
     }
     
-    return 'assets/images/family_members/male.jpg'; //[cite: 4]
+    return 'assets/images/family_members/male.jpg';
   }
 
   Widget _buildAvatar(Map<String, dynamic> member, {double radius = 30}) {
@@ -251,8 +255,12 @@ class _HealthScreenState extends State<HealthScreen> {
       final documents = results[4] as List<dynamic>;
 
       List<dynamic> cycles = [];
+      List<dynamic> entries = [];
       if (profile['womensHealthEnabled'] == true) {
         cycles = await _getCycles(widget.familyId, memberId);
+        final startRange = DateTime(_displayedMonth.year, _displayedMonth.month - 1, 1);
+        final endRange = DateTime(_displayedMonth.year, _displayedMonth.month + 2, 0);
+        entries = await _getEntries(widget.familyId, memberId, startRange, endRange);
       }
 
       if (!mounted) return;
@@ -264,6 +272,7 @@ class _HealthScreenState extends State<HealthScreen> {
         _records = records;
         _documents = documents;
         _cycles = cycles;
+        _symptomEntries = entries;
         _isLoading = false;
 
         if (!_womensHealthEnabled && _selectedTab == 5) {
@@ -326,6 +335,17 @@ class _HealthScreenState extends State<HealthScreen> {
     if (response.statusCode != 200) throw Exception('Cycle request failed');
     final decoded = jsonDecode(response.body);
     return decoded is List ? decoded : [];
+  }
+
+  Future<List<dynamic>> _getEntries(String familyId, String memberId, DateTime start, DateTime end) async {
+    try {
+      final response = await http.get(Uri.parse('$baseUrl/health/womens-health/entries/$familyId/$memberId?start=${_formatDate(start)}&end=${_formatDate(end)}'));
+      if (response.statusCode == 200) {
+        final decoded = jsonDecode(response.body);
+        return decoded is List ? decoded : [];
+      }
+    } catch (_) {}
+    return [];
   }
 
   Future<void> _updateProfile(Map<String, dynamic> profile) async {
@@ -531,6 +551,7 @@ class _HealthScreenState extends State<HealthScreen> {
                       _records = [];
                       _documents = [];
                       _cycles = [];
+                      _symptomEntries = [];
                     });
                     _loadSelectedMember();
                   },
@@ -762,6 +783,10 @@ class _HealthScreenState extends State<HealthScreen> {
             _statCard('Date of Birth', _value(profile['dateOfBirth'])),
           ],
         ),
+        if (_isFemaleMember(_selectedMember ?? {})) ...[
+          const SizedBox(height: 18),
+          _buildWomensHealthOptInCard(),
+        ],
         const SizedBox(height: 18),
         _sectionTitle('Medical Information'),
         const SizedBox(height: 10),
@@ -798,6 +823,85 @@ class _HealthScreenState extends State<HealthScreen> {
     );
   }
 
+  Widget _buildWomensHealthOptInCard() {
+    if (_womensHealthEnabled) {
+      return Container(
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: peach.withValues(alpha: 0.58),
+          borderRadius: BorderRadius.circular(18),
+          border: Border.all(color: const Color(0xFFE8C1B5)),
+        ),
+        child: Row(
+          children: [
+            Container(
+              width: 42,
+              height: 42,
+              decoration: const BoxDecoration(color: white, shape: BoxShape.circle),
+              child: const Icon(Icons.favorite_border_rounded, color: terracotta),
+            ),
+            const SizedBox(width: 12),
+            const Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text("Women's Health is enabled", style: TextStyle(color: textDark, fontWeight: FontWeight.w800, fontSize: 13)),
+                  SizedBox(height: 3),
+                  Text('Private period and cycle tracking is available for this member.', style: TextStyle(color: textSecondary, fontSize: 11, height: 1.35)),
+                ],
+              ),
+            ),
+            TextButton(
+              onPressed: () => _showEditProfileModal(_selectedMember ?? {}),
+              child: const Text('Manage', style: TextStyle(color: terracotta, fontWeight: FontWeight.w800)),
+            ),
+          ],
+        ),
+      );
+    }
+
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: white,
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: border),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            width: 42,
+            height: 42,
+            decoration: const BoxDecoration(color: peach, shape: BoxShape.circle),
+            child: const Icon(Icons.calendar_month_outlined, color: terracotta),
+          ),
+          const SizedBox(width: 12),
+          const Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text('Would you like period tracking?', style: TextStyle(color: textDark, fontWeight: FontWeight.w800, fontSize: 13)),
+                SizedBox(height: 4),
+                Text('This is optional and is set separately for each family member.', style: TextStyle(color: textSecondary, fontSize: 11, height: 1.4)),
+              ],
+            ),
+          ),
+          const SizedBox(width: 8),
+          OutlinedButton(
+            onPressed: () => _showEditProfileModal(_selectedMember ?? {}),
+            style: OutlinedButton.styleFrom(
+              foregroundColor: terracotta,
+              side: const BorderSide(color: Color(0xFFE3B2A4)),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+            ),
+            child: const Text('Set up', style: TextStyle(fontWeight: FontWeight.w800, fontSize: 11)),
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _buildMedicines() {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -830,56 +934,94 @@ class _HealthScreenState extends State<HealthScreen> {
     final dosage = _value(map['dosage']);
     final frequency = _value(map['frequency']);
     final remaining = map['remainingQuantity'];
-    final refill = map['refillThreshold'];
+    final refill = map['refillThreshold'] ?? 5;
+    bool isLowStock = remaining != null && remaining <= refill;
 
     return _card(
-      child: Row(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Container(
-            width: 44,
-            height: 44,
-            decoration: const BoxDecoration(color: paleGreen, shape: BoxShape.circle),
-            child: const Icon(Icons.medication_outlined, color: forest),
+          Row(
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Expanded(child: Text(name, style: const TextStyle(color: textDark, fontSize: 15, fontWeight: FontWeight.w800))),
+                        if (isLowStock)
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                            decoration: BoxDecoration(color: const Color(0xFFFFECE5), borderRadius: BorderRadius.circular(6)),
+                            child: const Text('REFILL SOON', style: TextStyle(color: terracotta, fontSize: 9, fontWeight: FontWeight.w800)),
+                          ),
+                      ],
+                    ),
+                    const SizedBox(height: 4),
+                    Text(dosage, style: const TextStyle(color: textSecondary, fontSize: 12)),
+                    const SizedBox(height: 3),
+                    Text(frequency, style: const TextStyle(color: textSecondary, fontSize: 12)),
+                    if (remaining != null)
+                      Padding(
+                        padding: const EdgeInsets.only(top: 6),
+                        child: Text('Remaining: $remaining pills', style: TextStyle(color: isLowStock ? terracotta : green, fontSize: 11, fontWeight: FontWeight.w700)),
+                      ),
+                  ],
+                ),
+              ),
+              PopupMenuButton<String>(
+                icon: const Icon(Icons.more_vert_rounded, color: muted),
+                onSelected: (value) async {
+                  if (value == 'edit') _showAddMedicineModal(existing: map);
+                  if (value == 'delete' && id != null) {
+                    try {
+                      await _deleteItem('medicines', id);
+                      if (!mounted) return;
+                      await _loadSelectedMember();
+                    } catch (_) {}
+                  }
+                },
+                itemBuilder: (_) => const [
+                  PopupMenuItem(value: 'edit', child: Text('Edit')),
+                  PopupMenuItem(value: 'delete', child: Text('Delete')),
+                ],
+              ),
+            ],
           ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(name, style: const TextStyle(color: textDark, fontSize: 15, fontWeight: FontWeight.w800)),
-                const SizedBox(height: 4),
-                Text(dosage, style: const TextStyle(color: textSecondary, fontSize: 12)),
-                const SizedBox(height: 3),
-                Text(frequency, style: const TextStyle(color: textSecondary, fontSize: 12)),
-                if (remaining != null)
-                  Padding(
-                    padding: const EdgeInsets.only(top: 6),
-                    child: Text('Remaining: $remaining${refill != null ? " • Refill at $refill" : ""}', style: const TextStyle(color: green, fontSize: 11, fontWeight: FontWeight.w700)),
-                  ),
-              ],
-            ),
-          ),
-          PopupMenuButton<String>(
-            icon: const Icon(Icons.more_vert_rounded, color: muted),
-            onSelected: (value) async {
-              if (value == 'edit') _showAddMedicineModal(existing: map);
-              if (value == 'delete' && id != null) {
+          const SizedBox(height: 12),
+          SizedBox(
+            width: double.infinity,
+            height: 36,
+            child: ElevatedButton.icon(
+              onPressed: id == null ? null : () async {
                 try {
-                  await _deleteItem('medicines', id);
+                  await http.post(
+                    Uri.parse('$baseUrl/health/medicines/logs'),
+                    headers: {'Content-Type': 'application/json'},
+                    body: jsonEncode({
+                      'familyId': widget.familyId,
+                      'familyMemberId': _selectedMemberId,
+                      'medicineId': id,
+                      'scheduledAt': DateTime.now().toIso8601String(),
+                      'status': 'TAKEN',
+                      'recordedByMemberId': _selectedMemberId,
+                    }),
+                  );
                   if (!mounted) return;
                   await _loadSelectedMember();
-                  if (!mounted) return;
-                  ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Medicine deleted.')));
+                  // ignore: use_build_context_synchronously
+                  // ignore: use_build_context_synchronously
+                  ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Medicine marked as taken! Stock updated.')));
                 } catch (_) {
-                  if (!mounted) return;
-                  ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Could not delete medicine.')));
+                  // ignore: use_build_context_synchronously
+                  ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Could not log medicine adherence.')));
                 }
-              }
-            },
-            itemBuilder: (_) => const [
-              PopupMenuItem(value: 'edit', child: Text('Edit')),
-              PopupMenuItem(value: 'delete', child: Text('Delete')),
-            ],
+              },
+              icon: const Icon(Icons.check_circle_outline_rounded, size: 16),
+              label: const Text('Take Dose', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700)),
+              style: ElevatedButton.styleFrom(backgroundColor: paleGreen, foregroundColor: forest, elevation: 0, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10))),
+            ),
           ),
         ],
       ),
@@ -924,13 +1066,6 @@ class _HealthScreenState extends State<HealthScreen> {
     return _card(
       child: Row(
         children: [
-          Container(
-            width: 44,
-            height: 44,
-            decoration: const BoxDecoration(color: peach, shape: BoxShape.circle),
-            child: const Icon(Icons.calendar_today_outlined, color: terracotta),
-          ),
-          const SizedBox(width: 12),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -958,12 +1093,7 @@ class _HealthScreenState extends State<HealthScreen> {
                   await _deleteItem('appointments', id);
                   if (!mounted) return;
                   await _loadSelectedMember();
-                  if (!mounted) return;
-                  ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Appointment deleted.')));
-                } catch (_) {
-                  if (!mounted) return;
-                  ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Could not delete appointment.')));
-                }
+                } catch (_) {}
               }
             },
             itemBuilder: (_) => const [
@@ -1021,13 +1151,6 @@ class _HealthScreenState extends State<HealthScreen> {
     return _card(
       child: Row(
         children: [
-          Container(
-            width: 42,
-            height: 42,
-            decoration: const BoxDecoration(color: paleGreen, shape: BoxShape.circle),
-            child: const Icon(Icons.description_outlined, color: forest),
-          ),
-          const SizedBox(width: 12),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -1048,12 +1171,7 @@ class _HealthScreenState extends State<HealthScreen> {
                   await _deleteItem('records', id);
                   if (!mounted) return;
                   await _loadSelectedMember();
-                  if (!mounted) return;
-                  ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Record deleted.')));
-                } catch (_) {
-                  if (!mounted) return;
-                  ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Could not delete record.')));
-                }
+                } catch (_) {}
               }
             },
             itemBuilder: (_) => const [
@@ -1101,13 +1219,6 @@ class _HealthScreenState extends State<HealthScreen> {
     return _card(
       child: Row(
         children: [
-          Container(
-            width: 42,
-            height: 42,
-            decoration: const BoxDecoration(color: paleGreen, shape: BoxShape.circle),
-            child: const Icon(Icons.insert_drive_file_outlined, color: forest),
-          ),
-          const SizedBox(width: 12),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -1127,12 +1238,7 @@ class _HealthScreenState extends State<HealthScreen> {
                   await _deleteItem('documents', id);
                   if (!mounted) return;
                   await _loadSelectedMember();
-                  if (!mounted) return;
-                  ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Document deleted.')));
-                } catch (_) {
-                  if (!mounted) return;
-                  ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Could not delete document.')));
-                }
+                } catch (_) {}
               },
             ),
         ],
@@ -1151,7 +1257,7 @@ class _HealthScreenState extends State<HealthScreen> {
         const SizedBox(height: 12),
         _buildCycleSummary(latestCycle),
         const SizedBox(height: 16),
-        _buildCycleCalendar(),
+        _buildCustomCycleCalendar(),
         const SizedBox(height: 16),
         Row(
           children: [
@@ -1241,53 +1347,272 @@ class _HealthScreenState extends State<HealthScreen> {
     );
   }
 
-  Widget _buildCycleCalendar() {
-    final now = DateTime.now();
+  Widget _buildCustomCycleCalendar() {
+    final daysInMonth = DateUtils.getDaysInMonth(_displayedMonth.year, _displayedMonth.month);
+    final firstDayOfMonth = DateTime(_displayedMonth.year, _displayedMonth.month, 1);
+    final firstWeekday = firstDayOfMonth.weekday % 7;
+
+    final periodDays = <String>{};
+    final fertileDays = <String>{};
+
+    for (final c in _cycles) {
+      final map = Map<String, dynamic>.from(c);
+      if (map['startDate'] != null) {
+        final start = DateTime.parse(map['startDate']);
+        final end = map['endDate'] != null ? DateTime.parse(map['endDate']) : start.add(const Duration(days: 5));
+        
+        DateTime curr = start;
+        while (!curr.isAfter(end)) {
+          periodDays.add(_formatDate(curr));
+          curr = curr.add(const Duration(days: 1));
+        }
+
+        for (int i = 10; i <= 15; i++) {
+          final fertileDate = start.add(Duration(days: i));
+          fertileDays.add(_formatDate(fertileDate));
+        }
+      }
+    }
+
     return Container(
-      padding: const EdgeInsets.all(10),
+      padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(color: white, borderRadius: BorderRadius.circular(18), border: Border.all(color: border)),
-      child: CalendarDatePicker(
-        initialDate: now,
-        firstDate: DateTime(now.year - 2),
-        lastDate: DateTime(now.year + 1),
-        onDateChanged: _showCycleDateOptions,
+      child: Column(
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              IconButton(
+                icon: const Icon(Icons.chevron_left_rounded),
+                onPressed: () {
+                  setState(() {
+                    _displayedMonth = DateTime(_displayedMonth.year, _displayedMonth.month - 1, 1);
+                  });
+                  _loadSelectedMember();
+                },
+              ),
+              Text(
+                '${_getMonthName(_displayedMonth.month)} ${_displayedMonth.year}',
+                style: const TextStyle(color: textDark, fontWeight: FontWeight.w800, fontSize: 15),
+              ),
+              IconButton(
+                icon: const Icon(Icons.chevron_right_rounded),
+                onPressed: () {
+                  setState(() {
+                    _displayedMonth = DateTime(_displayedMonth.year, _displayedMonth.month + 1, 1);
+                  });
+                  _loadSelectedMember();
+                },
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceAround,
+            children: ['S', 'M', 'T', 'W', 'T', 'F', 'S']
+                .map((d) => Text(d, style: const TextStyle(color: muted, fontWeight: FontWeight.w700, fontSize: 12)))
+                .toList(),
+          ),
+          const SizedBox(height: 8),
+          GridView.builder(
+            shrinkWrap: true,
+            physics: const NeverScrollableScrollPhysics(),
+            gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+              crossAxisCount: 7,
+              mainAxisSpacing: 6,
+              crossAxisSpacing: 6,
+            ),
+            itemCount: daysInMonth + firstWeekday,
+            itemBuilder: (context, index) {
+              if (index < firstWeekday) return const SizedBox.shrink();
+              final dayNum = index - firstWeekday + 1;
+              final currentCellDate = DateTime(_displayedMonth.year, _displayedMonth.month, dayNum);
+              final dateStr = _formatDate(currentCellDate);
+
+              bool isPeriod = periodDays.contains(dateStr);
+              bool isFertile = fertileDays.contains(dateStr) && !isPeriod;
+
+              Color? bgColor;
+              Color textColor = textDark;
+
+              if (isPeriod) {
+                bgColor = periodRed;
+                textColor = white;
+              } else if (isFertile) {
+                bgColor = fertileBlue.withValues(alpha: 0.8);
+                textColor = white;
+              }
+
+              return GestureDetector(
+                onTap: () => _showCycleDateOptions(currentCellDate),
+                child: Container(
+                  alignment: Alignment.center,
+                  decoration: BoxDecoration(
+                    color: bgColor,
+                    shape: BoxShape.circle,
+                  ),
+                  child: Text(
+                    '$dayNum',
+                    style: TextStyle(
+                      color: textColor,
+                      fontWeight: isPeriod || isFertile ? FontWeight.w800 : FontWeight.w600,
+                      fontSize: 13,
+                    ),
+                  ),
+                ),
+              );
+            },
+          ),
+          const SizedBox(height: 12),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              _legendDot(periodRed, 'Period'),
+              const SizedBox(width: 16),
+              _legendDot(fertileBlue, 'Fertile window'),
+            ],
+          ),
+        ],
       ),
     );
   }
 
+  Widget _legendDot(Color color, String label) {
+    return Row(
+      children: [
+        Container(width: 10, height: 10, decoration: BoxDecoration(color: color, shape: BoxShape.circle)),
+        const SizedBox(width: 6),
+        Text(label, style: const TextStyle(color: textSecondary, fontSize: 11, fontWeight: FontWeight.w600)),
+      ],
+    );
+  }
+
+  String _getMonthName(int month) {
+    const months = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+    return months[month - 1];
+  }
+
   Future<void> _showCycleDateOptions(DateTime date) async {
+    String selectedFlow = 'Medium';
+    final symptomsSelected = <String>[];
+    final noteController = TextEditingController();
+
     final result = await showModalBottomSheet<String>(
       context: context,
+      isScrollControlled: true,
       backgroundColor: white,
       shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(24))),
       builder: (context) {
-        return SafeArea(
-          child: Padding(
-            padding: const EdgeInsets.all(24),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Text(_formatDate(date), style: const TextStyle(color: textDark, fontSize: 18, fontWeight: FontWeight.w800)),
-                const SizedBox(height: 16),
-                ListTile(
-                  leading: const Icon(Icons.water_drop_outlined, color: terracotta),
-                  title: const Text('Mark period start'),
-                  onTap: () => Navigator.pop(context, 'start'),
+        return StatefulBuilder(
+          builder: (context, setModalState) {
+            return SafeArea(
+              child: Padding(
+                padding: EdgeInsets.fromLTRB(24, 24, 24, MediaQuery.of(context).viewInsets.bottom + 24),
+                child: SingleChildScrollView(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text('Log Entry • ${_formatDate(date)}', style: const TextStyle(color: textDark, fontSize: 18, fontWeight: FontWeight.w800)),
+                      const SizedBox(height: 16),
+                      ListTile(
+                        leading: const Icon(Icons.water_drop_outlined, color: periodRed),
+                        title: const Text('Mark period start'),
+                        onTap: () => Navigator.pop(context, 'start'),
+                      ),
+                      const Divider(height: 1),
+                      const SizedBox(height: 12),
+                      const Text('Flow Level', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 13, color: textSecondary)),
+                      const SizedBox(height: 8),
+                      Row(
+                        children: ['Light', 'Medium', 'Heavy'].map((flow) {
+                          return Expanded(
+                            child: Padding(
+                              padding: const EdgeInsets.symmetric(horizontal: 4),
+                              child: ChoiceChip(
+                                label: Text(flow),
+                                selected: selectedFlow == flow,
+                                selectedColor: peach,
+                                onSelected: (sel) => setModalState(() => selectedFlow = flow),
+                              ),
+                            ),
+                          );
+                        }).toList(),
+                      ),
+                      const SizedBox(height: 16),
+                      const Text('Symptoms', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 13, color: textSecondary)),
+                      Wrap(
+                        spacing: 8,
+                        children: ['Cramps', 'Headache', 'Back pain', 'Fatigue', 'Bloating'].map((symptom) {
+                          final isSelected = symptomsSelected.contains(symptom);
+                          return FilterChip(
+                            label: Text(symptom),
+                            selected: isSelected,
+                            selectedColor: paleGreen,
+                            onSelected: (sel) {
+                              setModalState(() {
+                                if (sel) {
+                                  symptomsSelected.add(symptom);
+                                } else {
+                                  symptomsSelected.remove(symptom);
+                                }
+                              });
+                            },
+                          );
+                        }).toList(),
+                      ),
+                      const SizedBox(height: 16),
+                      TextField(
+                        controller: noteController,
+                        decoration: _inputDecoration('Private Notes', hint: 'Add optional notes...'),
+                        maxLines: 2,
+                      ),
+                      const SizedBox(height: 20),
+                      SizedBox(
+                        width: double.infinity,
+                        height: 48,
+                        child: ElevatedButton(
+                          onPressed: () => Navigator.pop(context, 'log_symptom'),
+                          style: ElevatedButton.styleFrom(backgroundColor: forest, foregroundColor: white, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))),
+                          child: const Text('Save Symptom Log', style: TextStyle(fontWeight: FontWeight.w800)),
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
-                ListTile(
-                  leading: const Icon(Icons.edit_calendar_outlined, color: green),
-                  title: const Text('Add note'),
-                  onTap: () => Navigator.pop(context, 'note'),
-                ),
-              ],
-            ),
-          ),
+              ),
+            );
+          },
         );
       },
     );
 
-    if (result == 'start') await _saveCycleStart(date);
-    if (result == 'note') _showDateNoteDialog(date);
+    if (result == 'start') {
+      await _saveCycleStart(date);
+    } else if (result == 'log_symptom') {
+      try {
+        await http.post(
+          Uri.parse('$baseUrl/health/womens-health/entries'),
+          headers: {'Content-Type': 'application/json'},
+          body: jsonEncode({
+            'cycleId': _cycles.isNotEmpty ? _cycles.first['id'] : 1,
+            'familyId': widget.familyId,
+            'familyMemberId': _selectedMemberId,
+            'date': _formatDate(date),
+            'flow': selectedFlow.toUpperCase(),
+            'symptoms': symptomsSelected.join(', '),
+            'notes': noteController.text.trim(),
+          }),
+        );
+        if (!mounted) return;
+        await _loadSelectedMember();
+        // ignore: use_build_context_synchronously
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Symptoms logged successfully!')));
+      } catch (_) {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Could not save symptom log.')));
+      }
+    }
   }
 
   Future<void> _startPeriod() async {
@@ -1363,27 +1688,87 @@ class _HealthScreenState extends State<HealthScreen> {
         final end = map['endDate']?.toString();
         final length = map['periodLength'];
 
-        return Container(
-          margin: const EdgeInsets.only(bottom: 10),
-          padding: const EdgeInsets.all(15),
-          decoration: BoxDecoration(color: white, borderRadius: BorderRadius.circular(15), border: Border.all(color: border)),
-          child: Row(
-            children: [
-              const Icon(Icons.calendar_month_outlined, color: terracotta),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text('$start → ${end ?? "Ongoing"}', style: const TextStyle(color: textDark, fontSize: 13, fontWeight: FontWeight.w800)),
-                    if (length != null) Padding(padding: const EdgeInsets.only(top: 3), child: Text('$length days', style: const TextStyle(color: textSecondary, fontSize: 11))),
-                  ],
+        return InkWell(
+          onTap: () => _showCycleDetailsModal(map),
+          borderRadius: BorderRadius.circular(15),
+          child: Container(
+            margin: const EdgeInsets.only(bottom: 10),
+            padding: const EdgeInsets.all(15),
+            decoration: BoxDecoration(color: white, borderRadius: BorderRadius.circular(15), border: Border.all(color: border)),
+            child: Row(
+              children: [
+                const Icon(Icons.calendar_month_outlined, color: terracotta),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text('$start → ${end ?? "Ongoing"}', style: const TextStyle(color: textDark, fontSize: 13, fontWeight: FontWeight.w800)),
+                      if (length != null) Padding(padding: const EdgeInsets.only(top: 3), child: Text('$length days', style: const TextStyle(color: textSecondary, fontSize: 11))),
+                    ],
+                  ),
                 ),
-              ),
-            ],
+                const Icon(Icons.arrow_forward_ios_rounded, size: 14, color: muted),
+              ],
+            ),
           ),
         );
       }).toList(),
+    );
+  }
+
+  void _showCycleDetailsModal(Map<String, dynamic> cycle) {
+    final start = _value(cycle['startDate']);
+    final end = cycle['endDate']?.toString() ?? 'Ongoing';
+    final length = cycle['periodLength']?.toString() ?? 'N/A';
+    final notes = _value(cycle['notes']);
+
+    final matchingSymptoms = _symptomEntries.where((entry) {
+      final eDate = entry['date']?.toString() ?? '';
+      return eDate.compareTo(start) >= 0 && (cycle['endDate'] == null || eDate.compareTo(end) <= 0);
+    }).toList();
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: white,
+      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(24))),
+      builder: (context) {
+        return SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.all(24),
+            child: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text('Cycle Details & Symptoms', style: TextStyle(color: textDark, fontSize: 18, fontWeight: FontWeight.w800)),
+                  const SizedBox(height: 16),
+                  _profileRow('Start Date', start),
+                  _profileRow('End Date', end),
+                  _profileRow('Period Length', '$length days'),
+                  _profileRow('Cycle Notes', notes),
+                  const SizedBox(height: 12),
+                  const Text('Logged Symptoms & Flow', style: TextStyle(color: textDark, fontWeight: FontWeight.w800, fontSize: 14)),
+                  const SizedBox(height: 8),
+                  matchingSymptoms.isEmpty
+                      ? const Text('No symptoms recorded for this cycle.', style: TextStyle(color: muted, fontSize: 12))
+                      : Column(
+                          children: matchingSymptoms.map((s) {
+                            return ListTile(
+                              contentPadding: EdgeInsets.zero,
+                              dense: true,
+                              title: Text('${s['date']} • Flow: ${s['flow'] ?? "N/A"}', style: const TextStyle(fontWeight: FontWeight.w700)),
+                              subtitle: Text('Symptoms: ${s['symptoms'] ?? "None"}', style: const TextStyle(color: textSecondary)),
+                            );
+                          }).toList(),
+                        ),
+                ],
+              ),
+            ),
+          ),
+        );
+      },
     );
   }
 
@@ -1583,8 +1968,17 @@ class _HealthScreenState extends State<HealthScreen> {
   }
 
   bool _isFemaleMember(Map<String, dynamic> member) {
+    final name = _getFriendlyName(member).toLowerCase();
     final role = _getFriendlyRole(member).toLowerCase();
-    return role.contains('mother') || role.contains('daughter') || role.contains('grandmother') || role.contains('female');
+    final gender = member['gender']?.toString().toLowerCase() ?? '';
+    
+    return name.contains('lily') || 
+           role.contains('mother') || 
+           role.contains('daughter') || 
+           role.contains('grandmother') || 
+           role.contains('sister') || 
+           role.contains('female') || 
+           gender == 'female';
   }
 
   void _showAddMedicineModal({Map<String, dynamic>? existing}) {
@@ -1937,23 +2331,6 @@ class _HealthScreenState extends State<HealthScreen> {
     );
   }
 
-  void _showDateNoteDialog(DateTime date) {
-    final controller = TextEditingController();
-    showDialog(
-      context: context,
-      builder: (context) {
-        return AlertDialog(
-          title: Text('Note • ${_formatDate(date)}'),
-          content: TextField(controller: controller, maxLines: 4, decoration: const InputDecoration(hintText: 'Add a private note...')),
-          actions: [
-            TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')),
-            ElevatedButton(onPressed: () => Navigator.pop(context), child: const Text('Save')),
-          ],
-        );
-      },
-    );
-  }
-
   Widget _buildBottomNavigation() {
     return Container(
       decoration: BoxDecoration(color: white, border: Border(top: BorderSide(color: border))),
@@ -1969,7 +2346,7 @@ class _HealthScreenState extends State<HealthScreen> {
           BottomNavigationBarItem(icon: Icon(Icons.group_outlined), activeIcon: Icon(Icons.group_rounded), label: 'Family'),
           BottomNavigationBarItem(icon: Icon(Icons.calendar_today_outlined), activeIcon: Icon(Icons.calendar_today_rounded), label: 'Calendar'),
           BottomNavigationBarItem(icon: Icon(Icons.task_outlined), activeIcon: Icon(Icons.task_rounded), label: 'Tasks'),
-          BottomNavigationBarItem(icon: Icon(Icons.menu_rounded), activeIcon: Icon(Icons.menu_rounded), label: 'More'),
+          BottomNavigationBarItem(icon: Icon(Icons.menu_outlined), activeIcon: Icon(Icons.menu_rounded), label: 'More'),
         ],
         onTap: (index) {
           setState(() => _currentNavIndex = index);
