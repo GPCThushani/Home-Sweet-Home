@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import '../../health/screens/health_screen.dart';
 import '../../shopping/screens/shopping_screens.dart';
+import '../../garden/screens/plants_garden_screen.dart';
 
 class MoreScreen extends StatelessWidget {
   final String userEmail;
@@ -68,7 +69,7 @@ class MoreScreen extends StatelessWidget {
                 icon: Icons.grass_rounded,
                 iconColor: Colors.green.shade700,
                 title: 'Plants / Garden',
-                onTap: () => _navigateTo(context, 'Plants / Garden'),
+                onTap: () => _navigateToGarden(context),
               ),
               _buildDivider(),
               _buildMenuItem(
@@ -186,6 +187,30 @@ class MoreScreen extends StatelessWidget {
     }
   }
 
+  void _navigateToShopping(BuildContext context) {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => ShoppingScreen(
+          userEmail: userEmail,
+          familyId: familyId,
+        ),
+      ),
+    );
+  }
+
+  void _navigateToGarden(BuildContext context) {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => PlantsGardenScreen(
+          userEmail: userEmail,
+          familyId: familyId,
+        ),
+      ),
+    );
+  }
+
   Widget _buildSectionContainer(List<Widget> children) {
     return Container(
       decoration: BoxDecoration(
@@ -268,16 +293,4 @@ class MoreScreen extends StatelessWidget {
       ),
     );
   }
-
-  void _navigateToShopping(BuildContext context) {
-  Navigator.push(
-    context,
-    MaterialPageRoute(
-      builder: (context) => ShoppingScreen(
-        userEmail: userEmail,
-        familyId: familyId,
-      ),
-    ),
-  );
-}
 }
