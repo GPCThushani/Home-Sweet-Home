@@ -19,8 +19,10 @@ class PlantsGardenScreen extends StatefulWidget {
 }
 
 class _PlantsGardenScreenState extends State<PlantsGardenScreen> {
-  static const String baseUrl = 'http://localhost:8080/api';
+  static const String baseUrl = 'http://localhost:8080/api/garden';
   int _currentNavIndex = 4;
+
+  bool _isLoading = true;
 
   static const Color ivory = Color(0xFFFAF8F3);
   static const Color white = Colors.white;
@@ -33,32 +35,22 @@ class _PlantsGardenScreenState extends State<PlantsGardenScreen> {
   static const Color border = Color(0xFFE5E1D9);
   static const Color peach = Color(0xFFF4DDD2);
 
-  final Map<String, List<String>> _growingAtHome = {
+  Map<String, List<Map<String, dynamic>>> _growingAtHome = {
     'Vegetables': [],
     'Fruits': [],
     'Flowers': [],
     'Herbs': [],
   };
 
-  final List<Map<String, dynamic>> _routines = [
-    {'title': 'Water the garden', 'frequency': 'Every 2 days • 7:00 AM', 'done': false},
-    {'title': 'Weekly Garden Care (Weed, prune, clean)', 'frequency': 'Every Sunday • 8:00 AM', 'done': false},
-    {'title': 'Fertilize plants with compost', 'frequency': 'Monthly', 'done': true},
-  ];
+  List<Map<String, dynamic>> _routines = [];
+  List<Map<String, dynamic>> _quickCareActions = [];
+  List<Map<String, dynamic>> _gardenNeeds = [];
 
-  final List<Map<String, dynamic>> _quickCareActions = [
-    {'action': 'Weed garden beds', 'done': false},
-    {'action': 'Prune dead leaves & branches', 'done': false},
-    {'action': 'Clean pots and plant racks', 'done': false},
-    {'action': 'Check for pests / spray neem oil', 'done': false},
-    {'action': 'Rearrange or move pots for sunlight', 'done': false},
-  ];
-
-  final List<String> _gardenNeeds = [
-    'Potting soil bag (5kg)',
-    'Organic compost fertilizer',
-    'Medium terracotta plant pots (x3)',
-  ];
+  @override
+  void initState() {
+    super.initState();
+    _loadGardenData();
+  }
 
   Future<Map<String, String>> _headers() async {
     final prefs = await SharedPreferences.getInstance();
@@ -67,6 +59,125 @@ class _PlantsGardenScreenState extends State<PlantsGardenScreen> {
       'Content-Type': 'application/json',
       if (jwtToken != null && jwtToken.isNotEmpty) 'Authorization': 'Bearer $jwtToken',
     };
+  }
+
+  Future<void> _loadGardenData() async {
+    if (mounted) setState(() => _isLoading = true);
+    try {
+      final headers = await _headers();
+      
+      // 1. Fetch Plants
+      final plantsRes = await http.get(Uri.parse('$baseUrl/plants/${widget.familyId}'), headers: headers);
+      Map<String, List<Map<String, dynamic>>> loadedPlants = {
+        'Vegetables': [],
+        'Fruits': [],
+        'Flowers': [],
+        'Herbs': [],
+      };
+      if (plantsRes.statusCode == 200) {
+        final List decoded = jsonDecode(plantsRes.body);
+        for (var p in decoded) {
+          final cat = p['category'] ?? 'Vegetables';
+          if (loadedPlants.containsKey(cat)) {
+            loadedPlants[cat]!.add({'id': p['id'], 'name': p['name']});
+          }
+        }
+      }
+
+      // 2. Fetch Routines (isQuickAction = false)
+      final routinesRes = await http.get(Uri.parse('$baseUrl/routines/${widget.familyId}?quickAction=false'), headers: headers);
+      List<Map<String, dynamic>> loadedRoutines = [];
+      if (routinesRes.statusCode == 200) {
+        final List decoded = jsonDecode(routinesRes.body);
+        if (decoded.isEmpty) {
+          // Exactly 4 default routines
+          final defaults = [
+            {'title': 'Water the garden', 'frequency': 'Every 2 days • 7:00 AM', 'completed': false, 'isQuickAction': false},
+            {'title': 'Weekly Garden Care', 'frequency': 'Every Sunday • 8:00 AM', 'completed': false, 'isQuickAction': false},
+            {'title': 'Fertilize with compost', 'frequency': 'Monthly', 'completed': false, 'isQuickAction': false},
+            {'title': 'Check soil moisture', 'frequency': 'Every 3 days', 'completed': false, 'isQuickAction': false},
+          ];
+          for (var def in defaults) {
+            final postRes = await http.post(
+              Uri.parse('$baseUrl/routines/${widget.familyId}'),
+              headers: headers,
+              body: jsonEncode(def),
+            );
+            if (postRes.statusCode == 200) {
+              final saved = jsonDecode(postRes.body);
+              loadedRoutines.add({'id': saved['id'], 'title': saved['title'], 'frequency': saved['frequency'], 'done': saved['completed']});
+            }
+          }
+        } else {
+          for (var r in decoded) {
+            loadedRoutines.add({'id': r['id'], 'title': r['title'], 'frequency': r['frequency'], 'done': r['completed']});
+          }
+        }
+      }
+
+      // 3. Fetch Quick Actions (isQuickAction = true)
+      final actionsRes = await http.get(Uri.parse('$baseUrl/routines/${widget.familyId}?quickAction=true'), headers: headers);
+      List<Map<String, dynamic>> loadedActions = [];
+      if (actionsRes.statusCode == 200) {
+        final List decoded = jsonDecode(actionsRes.body);
+        if (decoded.isEmpty) {
+          // Exactly 4 default quick actions
+          final defaultActions = [
+            {'title': 'Weed garden beds', 'frequency': 'As needed', 'completed': false, 'isQuickAction': true},
+            {'title': 'Prune dead leaves', 'frequency': 'As needed', 'completed': false, 'isQuickAction': true},
+            {'title': 'Clean pots and racks', 'frequency': 'As needed', 'completed': false, 'isQuickAction': true},
+            {'title': 'Spray neem oil for pests', 'frequency': 'As needed', 'completed': false, 'isQuickAction': true},
+          ];
+          for (var def in defaultActions) {
+            final postRes = await http.post(
+              Uri.parse('$baseUrl/routines/${widget.familyId}'),
+              headers: headers,
+              body: jsonEncode(def),
+            );
+            if (postRes.statusCode == 200) {
+              final saved = jsonDecode(postRes.body);
+              loadedActions.add({'id': saved['id'], 'action': saved['title'], 'done': saved['completed']});
+            }
+          }
+        } else {
+          for (var a in decoded) {
+            loadedActions.add({'id': a['id'], 'action': a['title'], 'done': a['completed']});
+          }
+        }
+      }
+
+      // 4. Fetch Garden Shopping Needs from backend shopping items marked as garden requirement
+      final shoppingRes = await http.get(Uri.parse('http://localhost:8080/api/shopping/${widget.familyId}'), headers: headers);
+      List<Map<String, dynamic>> loadedNeeds = [];
+      if (shoppingRes.statusCode == 200) {
+        final List decoded = jsonDecode(shoppingRes.body);
+        for (var item in decoded) {
+          if (item['varietyNotes'] == 'Garden requirement') {
+            loadedNeeds.add({'id': item['id'], 'name': item['name']});
+          }
+        }
+      }
+      if (loadedNeeds.isEmpty) {
+        // Default initial needs
+        loadedNeeds = [
+          {'id': null, 'name': 'Potting soil bag (5kg)'},
+          {'id': null, 'name': 'Organic compost fertilizer'},
+        ];
+      }
+
+      if (mounted) {
+        setState(() {
+          _growingAtHome = loadedPlants;
+          _routines = loadedRoutines;
+          _quickCareActions = loadedActions;
+          _gardenNeeds = loadedNeeds;
+          _isLoading = false;
+        });
+      }
+    } catch (e) {
+      debugPrint('Error loading garden data: $e');
+      if (mounted) setState(() => _isLoading = false);
+    }
   }
 
   @override
@@ -116,256 +227,254 @@ class _PlantsGardenScreenState extends State<PlantsGardenScreen> {
             ),
             const SizedBox(height: 12),
             Expanded(
-              child: ListView(
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                children: [
-                  // Garden Conditions Banner
-                  Container(
-                    padding: const EdgeInsets.all(16),
-                    decoration: BoxDecoration(
-                      color: peach.withValues(alpha: 0.7),
-                      borderRadius: BorderRadius.circular(18),
-                      border: Border.all(color: border),
-                      boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.02), blurRadius: 6, offset: const Offset(0, 2))],
-                    ),
-                    child: const Row(
+              child: _isLoading
+                  ? const Center(child: CircularProgressIndicator(color: green))
+                  : ListView(
+                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                       children: [
-                        Icon(Icons.wb_sunny_rounded, color: Color(0xFFD97736), size: 28),
-                        SizedBox(width: 14),
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
+                        // Garden Conditions Banner
+                        Container(
+                          padding: const EdgeInsets.all(16),
+                          decoration: BoxDecoration(
+                            color: peach.withValues(alpha: 0.7),
+                            borderRadius: BorderRadius.circular(18),
+                            border: Border.all(color: border),
+                            boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.02), blurRadius: 6, offset: const Offset(0, 2))],
+                          ),
+                          child: const Row(
                             children: [
-                              Text('Garden Conditions', style: TextStyle(fontWeight: FontWeight.w800, color: textDark, fontSize: 14)),
-                              SizedBox(height: 2),
-                              Text('Warm & sunny this week. Regular watering recommended.', style: TextStyle(color: textSecondary, fontSize: 11)),
+                              Icon(Icons.wb_sunny_rounded, color: Color(0xFFD97736), size: 28),
+                              SizedBox(width: 14),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text('Garden Conditions', style: TextStyle(fontWeight: FontWeight.w800, color: textDark, fontSize: 14)),
+                                    SizedBox(height: 2),
+                                    Text('Warm & sunny this week. Regular watering recommended.', style: TextStyle(color: textSecondary, fontSize: 11)),
+                                  ],
+                                ),
+                              ),
                             ],
                           ),
                         ),
-                      ],
-                    ),
-                  ),
-                  const SizedBox(height: 18),
+                        const SizedBox(height: 18),
 
-                  // Section: Garden Care Routines
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      const Text('Garden Care Routines', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800, color: textDark)),
-                      TextButton.icon(
-                        onPressed: _showAddRoutineModal,
-                        icon: const Icon(Icons.add, size: 16, color: green),
-                        label: const Text('Add Routine', style: TextStyle(color: green, fontWeight: FontWeight.w700)),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 6),
-                  ..._routines.asMap().entries.map((entry) {
-                    final index = entry.key;
-                    final routine = entry.value;
-                    return Container(
-                      margin: const EdgeInsets.only(bottom: 10),
-                      decoration: BoxDecoration(
-                        color: white,
-                        borderRadius: BorderRadius.circular(16),
-                        border: Border.all(color: border),
-                        boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.02), blurRadius: 6, offset: const Offset(0, 2))],
-                      ),
-                      child: CheckboxListTile(
-                        title: Text(routine['title'], style: TextStyle(fontWeight: FontWeight.w700, color: textDark, decoration: routine['done'] ? TextDecoration.lineThrough : null)),
-                        subtitle: Text(routine['frequency'], style: const TextStyle(fontSize: 11, color: textSecondary)),
-                        value: routine['done'],
-                        activeColor: green,
-                        checkboxShape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
-                        secondary: PopupMenuButton<String>(
-                          icon: const Icon(Icons.more_vert_rounded, color: textSecondary, size: 18),
-                          onSelected: (val) {
-                            if (val == 'edit') _showEditRoutineModal(index);
-                            if (val == 'delete') setState(() => _routines.removeAt(index));
-                          },
-                          itemBuilder: (_) => const [
-                            PopupMenuItem(value: 'edit', child: Text('Edit')),
-                            PopupMenuItem(value: 'delete', child: Text('Delete')),
-                          ],
-                        ),
-                        onChanged: (val) => setState(() => routine['done'] = val ?? false),
-                      ),
-                    );
-                  }),
-
-                  const SizedBox(height: 16),
-                  // Section: While You're Here (Quick Care Actions)
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      const Text("While You're Here...", style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800, color: textDark)),
-                      TextButton.icon(
-                        onPressed: _showAddQuickActionModal,
-                        icon: const Icon(Icons.add, size: 16, color: green),
-                        label: const Text('Add Action', style: TextStyle(color: green, fontWeight: FontWeight.w700)),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 8),
-                  Container(
-                    padding: const EdgeInsets.symmetric(vertical: 8),
-                    decoration: BoxDecoration(
-                      color: white,
-                      borderRadius: BorderRadius.circular(18),
-                      border: Border.all(color: border),
-                      boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.02), blurRadius: 6, offset: const Offset(0, 2))],
-                    ),
-                    child: Column(
-                      children: _quickCareActions.asMap().entries.map((entry) {
-                        final index = entry.key;
-                        final action = entry.value;
-                        return CheckboxListTile(
-                          dense: true,
-                          title: Text(action['action'], style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: textDark, decoration: action['done'] ? TextDecoration.lineThrough : null)),
-                          value: action['done'],
-                          activeColor: green,
-                          checkboxShape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
-                          secondary: PopupMenuButton<String>(
-                            icon: const Icon(Icons.more_vert_rounded, color: textSecondary, size: 18),
-                            onSelected: (val) {
-                              if (val == 'edit') _showEditQuickActionModal(index);
-                              if (val == 'delete') setState(() => _quickCareActions.removeAt(index));
-                            },
-                            itemBuilder: (_) => const [
-                              PopupMenuItem(value: 'edit', child: Text('Edit')),
-                              PopupMenuItem(value: 'delete', child: Text('Delete')),
-                            ],
-                          ),
-                          onChanged: (val) => setState(() => action['done'] = val ?? false),
-                        );
-                      }).toList(),
-                    ),
-                  ),
-
-                  const SizedBox(height: 18),
-                  // Section: Growing at Home (Simple Inventory Sections)
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      const Text('Growing at Home', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800, color: textDark)),
-                      TextButton.icon(
-                        onPressed: _showAddPlantModal,
-                        icon: const Icon(Icons.add, size: 16, color: green),
-                        label: const Text('Add Plant', style: TextStyle(color: green, fontWeight: FontWeight.w700)),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 6),
-                  ..._growingAtHome.entries.map((entry) => Container(
-                        margin: const EdgeInsets.only(bottom: 12),
-                        padding: const EdgeInsets.all(14),
-                        decoration: BoxDecoration(
-                          color: white,
-                          borderRadius: BorderRadius.circular(16),
-                          border: Border.all(color: border),
-                          boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.02), blurRadius: 6, offset: const Offset(0, 2))],
-                        ),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(entry.key, style: const TextStyle(fontWeight: FontWeight.w800, color: forest, fontSize: 13)),
-                            const SizedBox(height: 8),
-                            entry.value.isEmpty
-                                ? const Padding(
-                                    padding: EdgeInsets.symmetric(vertical: 6),
-                                    child: Text('No plants added here yet.', style: TextStyle(color: muted, fontSize: 12)),
-                                  )
-                                : Wrap(
-                                    spacing: 8,
-                                    runSpacing: 6,
-                                    children: entry.value.map((plant) => Chip(
-                                          label: Text(plant, style: const TextStyle(fontSize: 12, color: textDark, fontWeight: FontWeight.w600)),
-                                          backgroundColor: paleGreen,
-                                          side: BorderSide.none,
-                                          deleteIcon: const Icon(Icons.close, size: 14),
-                                          onDeleted: () {
-                                            setState(() {
-                                              _growingAtHome[entry.key]?.remove(plant);
-                                            });
-                                          },
-                                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-                                        )).toList(),
-                                  ),
-                          ],
-                        ),
-                      )),
-
-                  const SizedBox(height: 12),
-                  // Section: Garden Needs (Connected to Shopping)
-                  Container(
-                    padding: const EdgeInsets.all(16),
-                    decoration: BoxDecoration(
-                      color: paleGreen.withValues(alpha: 0.6),
-                      borderRadius: BorderRadius.circular(18),
-                      border: Border.all(color: green.withValues(alpha: 0.3)),
-                    ),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
+                        // Section: Garden Care Routines
                         Row(
                           mainAxisAlignment: MainAxisAlignment.spaceBetween,
                           children: [
-                            const Text('Garden Shopping Needs', style: TextStyle(fontWeight: FontWeight.w800, color: textDark, fontSize: 15)),
-                            TextButton(
-                              onPressed: _showAddGardenNeedModal,
-                              child: const Text('+ Add Need', style: TextStyle(color: green, fontWeight: FontWeight.bold)),
+                            const Text('Garden Care Routines', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800, color: textDark)),
+                            TextButton.icon(
+                              onPressed: _showAddRoutineModal,
+                              icon: const Icon(Icons.add, size: 16, color: green),
+                              label: const Text('Add Routine', style: TextStyle(color: green, fontWeight: FontWeight.w700)),
                             ),
                           ],
                         ),
                         const SizedBox(height: 6),
-                        ..._gardenNeeds.asMap().entries.map((entry) {
+                        ..._routines.asMap().entries.map((entry) {
                           final index = entry.key;
-                          final need = entry.value;
-                          return Padding(
-                            padding: const EdgeInsets.symmetric(vertical: 4),
-                            child: Row(
-                              children: [
-                                const Icon(Icons.shopping_bag_outlined, size: 16, color: forest),
-                                const SizedBox(width: 10),
-                                Expanded(child: Text(need, style: const TextStyle(fontSize: 13, color: textDark, fontWeight: FontWeight.w500))),
-                                IconButton(
-                                  icon: const Icon(Icons.delete_outline, size: 16, color: Colors.redAccent),
-                                  onPressed: () => setState(() => _gardenNeeds.removeAt(index)),
-                                ),
-                              ],
+                          final routine = entry.value;
+                          return Container(
+                            margin: const EdgeInsets.only(bottom: 10),
+                            decoration: BoxDecoration(
+                              color: white,
+                              borderRadius: BorderRadius.circular(16),
+                              border: Border.all(color: border),
+                              boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.02), blurRadius: 6, offset: const Offset(0, 2))],
+                            ),
+                            child: CheckboxListTile(
+                              title: Text(routine['title'], style: TextStyle(fontWeight: FontWeight.w700, color: textDark, decoration: routine['done'] ? TextDecoration.lineThrough : null)),
+                              subtitle: Text(routine['frequency'], style: const TextStyle(fontSize: 11, color: textSecondary)),
+                              value: routine['done'],
+                              activeColor: green,
+                              checkboxShape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
+                              secondary: PopupMenuButton<String>(
+                                icon: const Icon(Icons.more_vert_rounded, color: textSecondary, size: 18),
+                                onSelected: (val) {
+                                  if (val == 'edit') _showEditRoutineModal(index);
+                                  if (val == 'delete') _deleteRoutine(routine['id'], index);
+                                },
+                                itemBuilder: (_) => const [
+                                  PopupMenuItem(value: 'edit', child: Text('Edit')),
+                                  PopupMenuItem(value: 'delete', child: Text('Delete')),
+                                ],
+                              ),
+                              onChanged: (val) => _toggleRoutineCompletion(routine, val ?? false),
                             ),
                           );
                         }),
+
+                        const SizedBox(height: 16),
+                        // Section: While You're Here (Quick Care Actions)
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            const Text("While You're Here...", style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800, color: textDark)),
+                            TextButton.icon(
+                              onPressed: _showAddQuickActionModal,
+                              icon: const Icon(Icons.add, size: 16, color: green),
+                              label: const Text('Add Action', style: TextStyle(color: green, fontWeight: FontWeight.w700)),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 8),
+                        Container(
+                          padding: const EdgeInsets.symmetric(vertical: 8),
+                          decoration: BoxDecoration(
+                            color: white,
+                            borderRadius: BorderRadius.circular(18),
+                            border: Border.all(color: border),
+                            boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.02), blurRadius: 6, offset: const Offset(0, 2))],
+                          ),
+                          child: Column(
+                            children: _quickCareActions.asMap().entries.map((entry) {
+                              final index = entry.key;
+                              final action = entry.value;
+                              return CheckboxListTile(
+                                dense: true,
+                                title: Text(action['action'], style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: textDark, decoration: action['done'] ? TextDecoration.lineThrough : null)),
+                                value: action['done'],
+                                activeColor: green,
+                                checkboxShape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
+                                secondary: PopupMenuButton<String>(
+                                  icon: const Icon(Icons.more_vert_rounded, color: textSecondary, size: 18),
+                                  onSelected: (val) {
+                                    if (val == 'edit') _showEditQuickActionModal(index);
+                                    if (val == 'delete') _deleteQuickAction(action['id'], index);
+                                  },
+                                  itemBuilder: (_) => const [
+                                    PopupMenuItem(value: 'edit', child: Text('Edit')),
+                                    PopupMenuItem(value: 'delete', child: Text('Delete')),
+                                  ],
+                                ),
+                                onChanged: (val) => _toggleQuickActionCompletion(action, val ?? false),
+                              );
+                            }).toList(),
+                          ),
+                        ),
+
+                        const SizedBox(height: 18),
+                        // Section: Growing at Home (Simple Inventory Sections)
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            const Text('Growing at Home', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800, color: textDark)),
+                            TextButton.icon(
+                              onPressed: _showAddPlantModal,
+                              icon: const Icon(Icons.add, size: 16, color: green),
+                              label: const Text('Add Plant', style: TextStyle(color: green, fontWeight: FontWeight.w700)),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 6),
+                        ..._growingAtHome.entries.map((entry) => Container(
+                              margin: const EdgeInsets.only(bottom: 12),
+                              padding: const EdgeInsets.all(14),
+                              decoration: BoxDecoration(
+                                color: white,
+                                borderRadius: BorderRadius.circular(16),
+                                border: Border.all(color: border),
+                                boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.02), blurRadius: 6, offset: const Offset(0, 2))],
+                              ),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(entry.key, style: const TextStyle(fontWeight: FontWeight.w800, color: forest, fontSize: 13)),
+                                  const SizedBox(height: 8),
+                                  entry.value.isEmpty
+                                      ? const Padding(
+                                          padding: EdgeInsets.symmetric(vertical: 6),
+                                          child: Text('No plants added here yet.', style: TextStyle(color: muted, fontSize: 12)),
+                                        )
+                                      : Wrap(
+                                          spacing: 8,
+                                          runSpacing: 6,
+                                          children: entry.value.map((plantMap) => Chip(
+                                                label: Text(plantMap['name'], style: const TextStyle(fontSize: 12, color: textDark, fontWeight: FontWeight.w600)),
+                                                backgroundColor: paleGreen,
+                                                side: BorderSide.none,
+                                                deleteIcon: const Icon(Icons.close, size: 14),
+                                                onDeleted: () => _deletePlant(plantMap['id']),
+                                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+                                              )).toList(),
+                                        ),
+                                ],
+                              ),
+                            )),
+
+                        const SizedBox(height: 12),
+                        // Section: Garden Needs (Connected to Shopping)
+                        Container(
+                          padding: const EdgeInsets.all(16),
+                          decoration: BoxDecoration(
+                            color: paleGreen.withValues(alpha: 0.6),
+                            borderRadius: BorderRadius.circular(18),
+                            border: Border.all(color: green.withValues(alpha: 0.3)),
+                          ),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Row(
+                                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                children: [
+                                  const Text('Garden Shopping Needs', style: TextStyle(fontWeight: FontWeight.w800, color: textDark, fontSize: 15)),
+                                  TextButton(
+                                    onPressed: _showAddGardenNeedModal,
+                                    child: const Text('+ Add Need', style: TextStyle(color: green, fontWeight: FontWeight.bold)),
+                                  ),
+                                ],
+                              ),
+                              const SizedBox(height: 6),
+                              ..._gardenNeeds.asMap().entries.map((entry) {
+                                final index = entry.key;
+                                final needMap = entry.value;
+                                return Padding(
+                                  padding: const EdgeInsets.symmetric(vertical: 4),
+                                  child: Row(
+                                    children: [
+                                      const Icon(Icons.shopping_bag_outlined, size: 16, color: forest),
+                                      const SizedBox(width: 10),
+                                      Expanded(child: Text(needMap['name'], style: const TextStyle(fontSize: 13, color: textDark, fontWeight: FontWeight.w500))),
+                                      IconButton(
+                                        icon: const Icon(Icons.delete_outline, size: 16, color: Colors.redAccent),
+                                        onPressed: () => _deleteGardenNeed(needMap['id'], index),
+                                      ),
+                                    ],
+                                  ),
+                                );
+                              }),
+                            ],
+                          ),
+                        ),
+
+                        const SizedBox(height: 20),
+                        // Decorative Plant Image Banner above Bottom Nav
+                        ClipRRect(
+                          borderRadius: BorderRadius.circular(18),
+                          child: Image.asset(
+                            'assets/images/garden/garden_banner.jpeg',
+                            height: 130,
+                            width: double.infinity,
+                            fit: BoxFit.cover,
+                            errorBuilder: (_, __, ___) => Container(
+                              height: 130,
+                              width: double.infinity,
+                              decoration: BoxDecoration(
+                                color: paleGreen.withValues(alpha: 0.6),
+                                borderRadius: BorderRadius.circular(18),
+                                border: Border.all(color: border),
+                              ),
+                              child: const Center(
+                                child: Icon(Icons.local_florist_rounded, color: forest, size: 40),
+                              ),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(height: 30),
                       ],
                     ),
-                  ),
-
-                  const SizedBox(height: 20),
-                  // Decorative Plant Image Banner Placeholder above Bottom Nav
-                  ClipRRect(
-                    borderRadius: BorderRadius.circular(18),
-                    child: Image.asset(
-                      'assets/images/garden/garden_banner.jpeg',
-                      height: 130,
-                      width: double.infinity,
-                      fit: BoxFit.cover,
-                      errorBuilder: (_, __, ___) => Container(
-                        height: 130,
-                        width: double.infinity,
-                        decoration: BoxDecoration(
-                          color: paleGreen.withValues(alpha: 0.6),
-                          borderRadius: BorderRadius.circular(18),
-                          border: Border.all(color: border),
-                        ),
-                        child: const Center(
-                          child: Icon(Icons.local_florist_rounded, color: forest, size: 40),
-                        ),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: 30),
-                ],
-              ),
             ),
           ],
         ),
@@ -407,6 +516,65 @@ class _PlantsGardenScreenState extends State<PlantsGardenScreen> {
     );
   }
 
+  // API Call Helpers for Backend Persistence
+  Future<void> _toggleRoutineCompletion(Map<String, dynamic> routine, bool done) async {
+    setState(() => routine['done'] = done);
+    try {
+      final headers = await _headers();
+      await http.put(
+        Uri.parse('$baseUrl/routines/${widget.familyId}/${routine['id']}'),
+        headers: headers,
+        body: jsonEncode({'title': routine['title'], 'frequency': routine['frequency'], 'completed': done, 'isQuickAction': false}),
+      );
+    } catch (_) {}
+  }
+
+  Future<void> _toggleQuickActionCompletion(Map<String, dynamic> action, bool done) async {
+    setState(() => action['done'] = done);
+    try {
+      final headers = await _headers();
+      await http.put(
+        Uri.parse('$baseUrl/routines/${widget.familyId}/${action['id']}'),
+        headers: headers,
+        body: jsonEncode({'title': action['action'], 'frequency': 'As needed', 'completed': done, 'isQuickAction': true}),
+      );
+    } catch (_) {}
+  }
+
+  Future<void> _deleteRoutine(dynamic id, int index) async {
+    setState(() => _routines.removeAt(index));
+    try {
+      final headers = await _headers();
+      await http.delete(Uri.parse('$baseUrl/routines/${widget.familyId}/$id'), headers: headers);
+    } catch (_) {}
+  }
+
+  Future<void> _deleteQuickAction(dynamic id, int index) async {
+    setState(() => _quickCareActions.removeAt(index));
+    try {
+      final headers = await _headers();
+      await http.delete(Uri.parse('$baseUrl/routines/${widget.familyId}/$id'), headers: headers);
+    } catch (_) {}
+  }
+
+  Future<void> _deletePlant(dynamic id) async {
+    try {
+      final headers = await _headers();
+      await http.delete(Uri.parse('$baseUrl/plants/${widget.familyId}/$id'), headers: headers);
+      _loadGardenData();
+    } catch (_) {}
+  }
+
+  Future<void> _deleteGardenNeed(dynamic id, int index) async {
+    setState(() => _gardenNeeds.removeAt(index));
+    if (id != null) {
+      try {
+        final headers = await _headers();
+        await http.delete(Uri.parse('http://localhost:8080/api/shopping/${widget.familyId}/item/$id'), headers: headers);
+      } catch (_) {}
+    }
+  }
+
   void _showAddRoutineModal() {
     final titleController = TextEditingController();
     final freqController = TextEditingController();
@@ -433,16 +601,26 @@ class _PlantsGardenScreenState extends State<PlantsGardenScreen> {
                 width: double.infinity,
                 height: 50,
                 child: ElevatedButton(
-                  onPressed: () {
-                    if (titleController.text.trim().isNotEmpty) {
-                      setState(() {
-                        _routines.add({
-                          'title': titleController.text.trim(),
-                          'frequency': freqController.text.trim().isNotEmpty ? freqController.text.trim() : 'As needed',
-                          'done': false,
-                        });
-                      });
-                      Navigator.pop(context);
+                  onPressed: () async {
+                    final title = titleController.text.trim();
+                    if (title.isNotEmpty) {
+                      try {
+                        final headers = await _headers();
+                        final res = await http.post(
+                          Uri.parse('$baseUrl/routines/${widget.familyId}'),
+                          headers: headers,
+                          body: jsonEncode({
+                            'title': title,
+                            'frequency': freqController.text.trim().isNotEmpty ? freqController.text.trim() : 'As needed',
+                            'completed': false,
+                            'isQuickAction': false,
+                          }),
+                        );
+                        if (res.statusCode == 200) {
+                          if (context.mounted) Navigator.pop(context);
+                          _loadGardenData();
+                        }
+                      } catch (_) {}
                     }
                   },
                   style: ElevatedButton.styleFrom(backgroundColor: forest, foregroundColor: white, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14))),
@@ -483,12 +661,22 @@ class _PlantsGardenScreenState extends State<PlantsGardenScreen> {
                 width: double.infinity,
                 height: 50,
                 child: ElevatedButton(
-                  onPressed: () {
-                    setState(() {
-                      routine['title'] = titleController.text.trim();
-                      routine['frequency'] = freqController.text.trim();
-                    });
-                    Navigator.pop(context);
+                  onPressed: () async {
+                    try {
+                      final headers = await _headers();
+                      await http.put(
+                        Uri.parse('$baseUrl/routines/${widget.familyId}/${routine['id']}'),
+                        headers: headers,
+                        body: jsonEncode({
+                          'title': titleController.text.trim(),
+                          'frequency': freqController.text.trim(),
+                          'completed': routine['done'],
+                          'isQuickAction': false,
+                        }),
+                      );
+                      if (context.mounted) Navigator.pop(context);
+                      _loadGardenData();
+                    } catch (_) {}
                   },
                   style: ElevatedButton.styleFrom(backgroundColor: forest, foregroundColor: white, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14))),
                   child: const Text('Save Changes', style: TextStyle(fontWeight: FontWeight.w800)),
@@ -512,10 +700,26 @@ class _PlantsGardenScreenState extends State<PlantsGardenScreen> {
           actions: [
             TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')),
             ElevatedButton(
-              onPressed: () {
-                if (controller.text.trim().isNotEmpty) {
-                  setState(() => _quickCareActions.add({'action': controller.text.trim(), 'done': false}));
-                  Navigator.pop(context);
+              onPressed: () async {
+                final text = controller.text.trim();
+                if (text.isNotEmpty) {
+                  try {
+                    final headers = await _headers();
+                    final res = await http.post(
+                      Uri.parse('$baseUrl/routines/${widget.familyId}'),
+                      headers: headers,
+                      body: jsonEncode({
+                        'title': text,
+                        'frequency': 'As needed',
+                        'completed': false,
+                        'isQuickAction': true,
+                      }),
+                    );
+                    if (res.statusCode == 200) {
+                      if (context.mounted) Navigator.pop(context);
+                      _loadGardenData();
+                    }
+                  } catch (_) {}
                 }
               },
               child: const Text('Add'),
@@ -538,9 +742,22 @@ class _PlantsGardenScreenState extends State<PlantsGardenScreen> {
           actions: [
             TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')),
             ElevatedButton(
-              onPressed: () {
-                setState(() => action['action'] = controller.text.trim());
-                Navigator.pop(context);
+              onPressed: () async {
+                try {
+                  final headers = await _headers();
+                  await http.put(
+                    Uri.parse('$baseUrl/routines/${widget.familyId}/${action['id']}'),
+                    headers: headers,
+                    body: jsonEncode({
+                      'title': controller.text.trim(),
+                      'frequency': 'As needed',
+                      'completed': action['done'],
+                      'isQuickAction': true,
+                    }),
+                  );
+                  if (context.mounted) Navigator.pop(context);
+                  _loadGardenData();
+                } catch (_) {}
               },
               child: const Text('Save'),
             ),
@@ -583,13 +800,24 @@ class _PlantsGardenScreenState extends State<PlantsGardenScreen> {
                     width: double.infinity,
                     height: 50,
                     child: ElevatedButton(
-                      onPressed: () {
+                      onPressed: () async {
                         final name = controller.text.trim();
                         if (name.isNotEmpty) {
-                          setState(() {
-                            _growingAtHome[selectedCategory]?.add(name);
-                          });
-                          Navigator.pop(context);
+                          try {
+                            final headers = await _headers();
+                            final res = await http.post(
+                              Uri.parse('$baseUrl/plants/${widget.familyId}'),
+                              headers: headers,
+                              body: jsonEncode({
+                                'name': name,
+                                'category': selectedCategory,
+                              }),
+                            );
+                            if (res.statusCode == 200) {
+                              if (context.mounted) Navigator.pop(context);
+                              _loadGardenData();
+                            }
+                          } catch (_) {}
                         }
                       },
                       style: ElevatedButton.styleFrom(backgroundColor: forest, foregroundColor: white, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14))),
@@ -619,12 +847,10 @@ class _PlantsGardenScreenState extends State<PlantsGardenScreen> {
               onPressed: () async {
                 final text = controller.text.trim();
                 if (text.isNotEmpty) {
-                  setState(() => _gardenNeeds.add(text));
-
                   try {
                     final headers = await _headers();
                     await http.post(
-                      Uri.parse('$baseUrl/shopping/${widget.familyId}'),
+                      Uri.parse('http://localhost:8080/api/shopping/${widget.familyId}'),
                       headers: headers,
                       body: jsonEncode({
                         'name': text,
@@ -638,6 +864,7 @@ class _PlantsGardenScreenState extends State<PlantsGardenScreen> {
                   } catch (_) {}
 
                   if (context.mounted) Navigator.pop(context);
+                  _loadGardenData();
                   _showMessage('Added to garden needs & synced to Shopping list.');
                 }
               },
