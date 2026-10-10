@@ -19,7 +19,7 @@ public class GardenPlant {
     private String name;
 
     @Column(nullable = false)
-    private String category; // Vegetables, Fruits, Flowers, Herbs
+    private String category;
 
     private LocalDate addedDate;
 

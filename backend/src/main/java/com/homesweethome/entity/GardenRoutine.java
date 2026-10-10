@@ -1,7 +1,9 @@
 package com.homesweethome.entity;
 
+import com.fasterxml.jackson.annotation.JsonProperty;
 import jakarta.persistence.*;
 import lombok.Data;
+import java.time.*;
 
 @Entity
 @Table(name = "garden_routines")
@@ -18,11 +20,21 @@ public class GardenRoutine {
     private String title;
 
     @Column(nullable = false)
-    private String frequency;
+    private String frequencyType = "AS_NEEDED";
+
+    private Integer intervalDays;
+
+    @Enumerated(EnumType.STRING)
+    private DayOfWeek dayOfWeek;
+
+    private Integer dayOfMonth;
+    private LocalTime scheduledTime;
+    private LocalDate nextDueDate;
+
+    @Column(name = "is_quick_action", nullable = false)
+    @JsonProperty("isQuickAction")
+    private boolean quickAction;
 
     @Column(nullable = false)
-    private boolean completed = false;
-    
-    @Column(nullable = false)
-    private boolean isQuickAction = false;
+    private boolean active = true;
 }

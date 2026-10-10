@@ -84,71 +84,50 @@ class _PlantsGardenScreenState extends State<PlantsGardenScreen> {
         }
       }
 
-      // 2. Fetch Routines (isQuickAction = false)
-      final routinesRes = await http.get(Uri.parse('$baseUrl/routines/${widget.familyId}?quickAction=false'), headers: headers);
+      // 2. Fetch Garden Care Routines (quickAction = false)
+      final routinesRes = await http.get(
+        Uri.parse('$baseUrl/routines/${widget.familyId}?quickAction=false'),
+        headers: headers,
+      );
       List<Map<String, dynamic>> loadedRoutines = [];
+
       if (routinesRes.statusCode == 200) {
         final List decoded = jsonDecode(routinesRes.body);
-        if (decoded.isEmpty) {
-          // Exactly 4 default routines
-          final defaults = [
-            {'title': 'Water the garden', 'frequency': 'Every 2 days • 7:00 AM', 'completed': false, 'isQuickAction': false},
-            {'title': 'Weekly Garden Care', 'frequency': 'Every Sunday • 8:00 AM', 'completed': false, 'isQuickAction': false},
-            {'title': 'Fertilize with compost', 'frequency': 'Monthly', 'completed': false, 'isQuickAction': false},
-            {'title': 'Check soil moisture', 'frequency': 'Every 3 days', 'completed': false, 'isQuickAction': false},
-          ];
-          for (var def in defaults) {
-            final postRes = await http.post(
-              Uri.parse('$baseUrl/routines/${widget.familyId}'),
-              headers: headers,
-              body: jsonEncode(def),
-            );
-            if (postRes.statusCode == 200) {
-              final saved = jsonDecode(postRes.body);
-              loadedRoutines.add({'id': saved['id'], 'title': saved['title'], 'frequency': saved['frequency'], 'done': saved['completed']});
-            }
-          }
-        } else {
-          for (var r in decoded) {
-            loadedRoutines.add({'id': r['id'], 'title': r['title'], 'frequency': r['frequency'], 'done': r['completed']});
-          }
+        for (final r in decoded) {
+          loadedRoutines.add({
+            'id': r['id'],
+            'title': r['title'],
+            'frequency': r['frequencyType'] == 'EVERY_N_DAYS' ? 'Every ${r['intervalDays']} days' : r['frequencyType'],
+            'done': r['completedForCurrentOccurrence'],
+          });
         }
       }
 
-      // 3. Fetch Quick Actions (isQuickAction = true)
-      final actionsRes = await http.get(Uri.parse('$baseUrl/routines/${widget.familyId}?quickAction=true'), headers: headers);
+      // 3. Fetch Quick Actions (quickAction = true)
+      final actionsRes = await http.get(
+        Uri.parse('$baseUrl/routines/${widget.familyId}?quickAction=true'),
+        headers: headers,
+      );
       List<Map<String, dynamic>> loadedActions = [];
+
       if (actionsRes.statusCode == 200) {
         final List decoded = jsonDecode(actionsRes.body);
-        if (decoded.isEmpty) {
-          // Exactly 4 default quick actions
-          final defaultActions = [
-            {'title': 'Weed garden beds', 'frequency': 'As needed', 'completed': false, 'isQuickAction': true},
-            {'title': 'Prune dead leaves', 'frequency': 'As needed', 'completed': false, 'isQuickAction': true},
-            {'title': 'Clean pots and racks', 'frequency': 'As needed', 'completed': false, 'isQuickAction': true},
-            {'title': 'Spray neem oil for pests', 'frequency': 'As needed', 'completed': false, 'isQuickAction': true},
-          ];
-          for (var def in defaultActions) {
-            final postRes = await http.post(
-              Uri.parse('$baseUrl/routines/${widget.familyId}'),
-              headers: headers,
-              body: jsonEncode(def),
-            );
-            if (postRes.statusCode == 200) {
-              final saved = jsonDecode(postRes.body);
-              loadedActions.add({'id': saved['id'], 'action': saved['title'], 'done': saved['completed']});
-            }
-          }
-        } else {
-          for (var a in decoded) {
-            loadedActions.add({'id': a['id'], 'action': a['title'], 'done': a['completed']});
-          }
+        for (final a in decoded) {
+          loadedActions.add({
+            'id': a['id'],
+            'action': a['title'],
+            'done': a['completedForCurrentOccurrence'],
+          });
         }
       }
 
-      // 4. Fetch Garden Shopping Needs from backend shopping items marked as garden requirement
-      final shoppingRes = await http.get(Uri.parse('http://localhost:8080/api/shopping/${widget.familyId}'), headers: headers);
+      // 4. Fetch Garden Shopping Needs
+      final shoppingRes = await http.get(
+        Uri.parse('http://localhost:8080/api/shopping/${widget.familyId}'),
+        headers: headers,
+      );
       List<Map<String, dynamic>> loadedNeeds = [];
+
       if (shoppingRes.statusCode == 200) {
         final List decoded = jsonDecode(shoppingRes.body);
         for (var item in decoded) {
@@ -157,12 +136,37 @@ class _PlantsGardenScreenState extends State<PlantsGardenScreen> {
           }
         }
       }
+
       if (loadedNeeds.isEmpty) {
-        // Default initial needs
-        loadedNeeds = [
-          {'id': null, 'name': 'Potting soil bag (5kg)'},
-          {'id': null, 'name': 'Organic compost fertilizer'},
+        final defaultNeeds = [
+          'Potting soil bag (5kg)',
+          'Organic compost fertilizer',
         ];
+
+        for (final name in defaultNeeds) {
+          try {
+            final postRes = await http.post(
+              Uri.parse('http://localhost:8080/api/shopping/${widget.familyId}'),
+              headers: headers,
+              body: jsonEncode({
+                'name': name,
+                'category': 'MONTHLY',
+                'subCategory': 'Household & Cleaning Supplies',
+                'quantity': '1',
+                'varietyNotes': 'Garden requirement',
+                'completed': false,
+              }),
+            );
+
+            if (postRes.statusCode == 200 || postRes.statusCode == 201) {
+              final saved = jsonDecode(postRes.body);
+              loadedNeeds.add({
+                'id': saved['id'],
+                'name': saved['name'],
+              });
+            }
+          } catch (_) {}
+        }
       }
 
       if (mounted) {
@@ -516,29 +520,49 @@ class _PlantsGardenScreenState extends State<PlantsGardenScreen> {
     );
   }
 
-  // API Call Helpers for Backend Persistence
+  // Safe API Handlers with Rollback and Scheduled Occurrence Endpoints
   Future<void> _toggleRoutineCompletion(Map<String, dynamic> routine, bool done) async {
+    final oldValue = routine['done'] == true;
     setState(() => routine['done'] = done);
+
     try {
       final headers = await _headers();
-      await http.put(
-        Uri.parse('$baseUrl/routines/${widget.familyId}/${routine['id']}'),
+      final endpoint = done ? 'complete' : 'completion';
+      final response = await http.post(
+        Uri.parse('$baseUrl/routines/${widget.familyId}/${routine['id']}/$endpoint'),
         headers: headers,
-        body: jsonEncode({'title': routine['title'], 'frequency': routine['frequency'], 'completed': done, 'isQuickAction': false}),
       );
-    } catch (_) {}
+
+      if (response.statusCode != 200 && response.statusCode != 204) {
+        throw Exception('Failed to update routine status');
+      }
+      await _loadGardenData();
+    } catch (e) {
+      setState(() => routine['done'] = oldValue);
+      _showMessage('Could not update routine occurrence.');
+    }
   }
 
   Future<void> _toggleQuickActionCompletion(Map<String, dynamic> action, bool done) async {
+    final oldValue = action['done'] == true;
     setState(() => action['done'] = done);
+
     try {
       final headers = await _headers();
-      await http.put(
-        Uri.parse('$baseUrl/routines/${widget.familyId}/${action['id']}'),
+      final endpoint = done ? 'complete' : 'completion';
+      final response = await http.post(
+        Uri.parse('$baseUrl/routines/${widget.familyId}/${action['id']}/$endpoint'),
         headers: headers,
-        body: jsonEncode({'title': action['action'], 'frequency': 'As needed', 'completed': done, 'isQuickAction': true}),
       );
-    } catch (_) {}
+
+      if (response.statusCode != 200 && response.statusCode != 204) {
+        throw Exception('Failed to update quick action status');
+      }
+      await _loadGardenData();
+    } catch (e) {
+      setState(() => action['done'] = oldValue);
+      _showMessage('Could not update quick action status.');
+    }
   }
 
   Future<void> _deleteRoutine(dynamic id, int index) async {
@@ -577,7 +601,8 @@ class _PlantsGardenScreenState extends State<PlantsGardenScreen> {
 
   void _showAddRoutineModal() {
     final titleController = TextEditingController();
-    final freqController = TextEditingController();
+    String freqType = 'EVERY_N_DAYS';
+    final intervalController = TextEditingController(text: '2');
 
     showModalBottomSheet(
       context: context,
@@ -585,50 +610,69 @@ class _PlantsGardenScreenState extends State<PlantsGardenScreen> {
       backgroundColor: white,
       shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(26))),
       builder: (context) {
-        return Padding(
-          padding: EdgeInsets.fromLTRB(22, 24, 22, MediaQuery.of(context).viewInsets.bottom + 24),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const Text('Add Garden Routine', style: TextStyle(color: textDark, fontSize: 20, fontWeight: FontWeight.w800)),
-              const SizedBox(height: 18),
-              TextField(controller: titleController, decoration: _inputDecoration('Routine Title', hint: 'e.g. Add compost')),
-              const SizedBox(height: 12),
-              TextField(controller: freqController, decoration: _inputDecoration('Frequency', hint: 'e.g. Every Saturday • 9:00 AM')),
-              const SizedBox(height: 20),
-              SizedBox(
-                width: double.infinity,
-                height: 50,
-                child: ElevatedButton(
-                  onPressed: () async {
-                    final title = titleController.text.trim();
-                    if (title.isNotEmpty) {
-                      try {
-                        final headers = await _headers();
-                        final res = await http.post(
-                          Uri.parse('$baseUrl/routines/${widget.familyId}'),
-                          headers: headers,
-                          body: jsonEncode({
-                            'title': title,
-                            'frequency': freqController.text.trim().isNotEmpty ? freqController.text.trim() : 'As needed',
-                            'completed': false,
-                            'isQuickAction': false,
-                          }),
-                        );
-                        if (res.statusCode == 200) {
-                          if (context.mounted) Navigator.pop(context);
-                          _loadGardenData();
+        return StatefulBuilder(
+          builder: (context, setModalState) {
+            return Padding(
+              padding: EdgeInsets.fromLTRB(22, 24, 22, MediaQuery.of(context).viewInsets.bottom + 24),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text('Add Garden Routine', style: TextStyle(color: textDark, fontSize: 20, fontWeight: FontWeight.w800)),
+                  const SizedBox(height: 18),
+                  TextField(controller: titleController, decoration: _inputDecoration('Routine Title', hint: 'e.g. Add compost')),
+                  const SizedBox(height: 12),
+                  DropdownButtonFormField<String>(
+                    initialValue: freqType,
+                    decoration: _inputDecoration('Frequency Type'),
+                    items: const [
+                      DropdownMenuItem(value: 'EVERY_N_DAYS', child: Text('Every N Days')),
+                      DropdownMenuItem(value: 'WEEKLY', child: Text('Weekly')),
+                      DropdownMenuItem(value: 'MONTHLY', child: Text('Monthly')),
+                    ],
+                    onChanged: (val) => setModalState(() => freqType = val!),
+                  ),
+                  if (freqType == 'EVERY_N_DAYS') ...[
+                    const SizedBox(height: 12),
+                    TextField(controller: intervalController, keyboardType: TextInputType.number, decoration: _inputDecoration('Interval Days')),
+                  ],
+                  const SizedBox(height: 20),
+                  SizedBox(
+                    width: double.infinity,
+                    height: 50,
+                    child: ElevatedButton(
+                      onPressed: () async {
+                        final title = titleController.text.trim();
+                        if (title.isNotEmpty) {
+                          try {
+                            final headers = await _headers();
+                            final res = await http.post(
+                              Uri.parse('$baseUrl/routines/${widget.familyId}'),
+                              headers: headers,
+                              body: jsonEncode({
+                                'title': title,
+                                'frequencyType': freqType,
+                                'intervalDays': freqType == 'EVERY_N_DAYS' ? int.tryParse(intervalController.text) ?? 2 : null,
+                                'dayOfWeek': 'SUNDAY',
+                                'dayOfMonth': 1,
+                                'isQuickAction': false,
+                              }),
+                            );
+                            if (res.statusCode == 200 || res.statusCode == 201) {
+                              if (context.mounted) Navigator.pop(context);
+                              _loadGardenData();
+                            }
+                          } catch (_) {}
                         }
-                      } catch (_) {}
-                    }
-                  },
-                  style: ElevatedButton.styleFrom(backgroundColor: forest, foregroundColor: white, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14))),
-                  child: const Text('Add Routine', style: TextStyle(fontWeight: FontWeight.w800)),
-                ),
+                      },
+                      style: ElevatedButton.styleFrom(backgroundColor: forest, foregroundColor: white, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14))),
+                      child: const Text('Add Routine', style: TextStyle(fontWeight: FontWeight.w800)),
+                    ),
+                  ),
+                ],
               ),
-            ],
-          ),
+            );
+          },
         );
       },
     );
@@ -637,7 +681,6 @@ class _PlantsGardenScreenState extends State<PlantsGardenScreen> {
   void _showEditRoutineModal(int index) {
     final routine = _routines[index];
     final titleController = TextEditingController(text: routine['title']);
-    final freqController = TextEditingController(text: routine['frequency']);
 
     showModalBottomSheet(
       context: context,
@@ -654,8 +697,6 @@ class _PlantsGardenScreenState extends State<PlantsGardenScreen> {
               const Text('Edit Garden Routine', style: TextStyle(color: textDark, fontSize: 20, fontWeight: FontWeight.w800)),
               const SizedBox(height: 18),
               TextField(controller: titleController, decoration: _inputDecoration('Routine Title')),
-              const SizedBox(height: 12),
-              TextField(controller: freqController, decoration: _inputDecoration('Frequency')),
               const SizedBox(height: 20),
               SizedBox(
                 width: double.infinity,
@@ -669,8 +710,8 @@ class _PlantsGardenScreenState extends State<PlantsGardenScreen> {
                         headers: headers,
                         body: jsonEncode({
                           'title': titleController.text.trim(),
-                          'frequency': freqController.text.trim(),
-                          'completed': routine['done'],
+                          'frequencyType': 'EVERY_N_DAYS',
+                          'intervalDays': 2,
                           'isQuickAction': false,
                         }),
                       );
@@ -702,24 +743,29 @@ class _PlantsGardenScreenState extends State<PlantsGardenScreen> {
             ElevatedButton(
               onPressed: () async {
                 final text = controller.text.trim();
-                if (text.isNotEmpty) {
-                  try {
-                    final headers = await _headers();
-                    final res = await http.post(
-                      Uri.parse('$baseUrl/routines/${widget.familyId}'),
-                      headers: headers,
-                      body: jsonEncode({
-                        'title': text,
-                        'frequency': 'As needed',
-                        'completed': false,
-                        'isQuickAction': true,
-                      }),
-                    );
-                    if (res.statusCode == 200) {
-                      if (context.mounted) Navigator.pop(context);
-                      _loadGardenData();
-                    }
-                  } catch (_) {}
+                if (text.isEmpty) return;
+
+                try {
+                  final headers = await _headers();
+                  final res = await http.post(
+                    Uri.parse('$baseUrl/routines/${widget.familyId}'),
+                    headers: headers,
+                    body: jsonEncode({
+                      'title': text,
+                      'frequencyType': 'AS_NEEDED',
+                      'isQuickAction': true,
+                    }),
+                  );
+
+                  if (res.statusCode == 200 || res.statusCode == 201) {
+                    if (context.mounted) Navigator.pop(context);
+                    await _loadGardenData();
+                    _showMessage('Maintenance action added successfully.');
+                  } else {
+                    _showMessage('Failed to save maintenance action.');
+                  }
+                } catch (_) {
+                  _showMessage('Could not save maintenance action.');
                 }
               },
               child: const Text('Add'),
@@ -743,21 +789,31 @@ class _PlantsGardenScreenState extends State<PlantsGardenScreen> {
             TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')),
             ElevatedButton(
               onPressed: () async {
+                final text = controller.text.trim();
+                if (text.isEmpty) return;
+
                 try {
                   final headers = await _headers();
-                  await http.put(
+                  final res = await http.put(
                     Uri.parse('$baseUrl/routines/${widget.familyId}/${action['id']}'),
                     headers: headers,
                     body: jsonEncode({
-                      'title': controller.text.trim(),
-                      'frequency': 'As needed',
-                      'completed': action['done'],
+                      'title': text,
+                      'frequencyType': 'AS_NEEDED',
                       'isQuickAction': true,
                     }),
                   );
-                  if (context.mounted) Navigator.pop(context);
-                  _loadGardenData();
-                } catch (_) {}
+
+                  if (res.statusCode == 200 || res.statusCode == 201) {
+                    if (context.mounted) Navigator.pop(context);
+                    await _loadGardenData();
+                    _showMessage('Maintenance action updated.');
+                  } else {
+                    _showMessage('Failed to update maintenance action.');
+                  }
+                } catch (_) {
+                  _showMessage('Could not update maintenance action.');
+                }
               },
               child: const Text('Save'),
             ),
@@ -813,7 +869,7 @@ class _PlantsGardenScreenState extends State<PlantsGardenScreen> {
                                 'category': selectedCategory,
                               }),
                             );
-                            if (res.statusCode == 200) {
+                            if (res.statusCode == 200 || res.statusCode == 201) {
                               if (context.mounted) Navigator.pop(context);
                               _loadGardenData();
                             }
@@ -846,26 +902,32 @@ class _PlantsGardenScreenState extends State<PlantsGardenScreen> {
             ElevatedButton(
               onPressed: () async {
                 final text = controller.text.trim();
-                if (text.isNotEmpty) {
-                  try {
-                    final headers = await _headers();
-                    await http.post(
-                      Uri.parse('http://localhost:8080/api/shopping/${widget.familyId}'),
-                      headers: headers,
-                      body: jsonEncode({
-                        'name': text,
-                        'category': 'MONTHLY',
-                        'subCategory': 'Household & Cleaning Supplies',
-                        'quantity': '1',
-                        'varietyNotes': 'Garden requirement',
-                        'completed': false,
-                      }),
-                    );
-                  } catch (_) {}
+                if (text.isEmpty) return;
 
-                  if (context.mounted) Navigator.pop(context);
-                  _loadGardenData();
-                  _showMessage('Added to garden needs & synced to Shopping list.');
+                try {
+                  final headers = await _headers();
+                  final res = await http.post(
+                    Uri.parse('http://localhost:8080/api/shopping/${widget.familyId}'),
+                    headers: headers,
+                    body: jsonEncode({
+                      'name': text,
+                      'category': 'MONTHLY',
+                      'subCategory': 'Household & Cleaning Supplies',
+                      'quantity': '1',
+                      'varietyNotes': 'Garden requirement',
+                      'completed': false,
+                    }),
+                  );
+
+                  if (res.statusCode == 200 || res.statusCode == 201) {
+                    if (context.mounted) Navigator.pop(context);
+                    await _loadGardenData();
+                    _showMessage('Added to garden needs & synced to Shopping list.');
+                  } else {
+                    _showMessage('Could not save garden shopping need.');
+                  }
+                } catch (_) {
+                  _showMessage('Could not connect to Shopping service.');
                 }
               },
               child: const Text('Add & Sync'),
