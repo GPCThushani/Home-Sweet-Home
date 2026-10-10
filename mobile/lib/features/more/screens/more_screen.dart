@@ -4,8 +4,9 @@ import 'package:http/http.dart' as http;
 import '../../health/screens/health_screen.dart';
 import '../../shopping/screens/shopping_screens.dart';
 import '../../garden/screens/plants_garden_screen.dart';
+import '../../maintenance/screens/home_maintenance_screen.dart'; 
 
-class MoreScreen extends StatelessWidget {
+class MoreScreen extends StatefulWidget {
   final String userEmail;
   final String familyId;
 
@@ -15,6 +16,11 @@ class MoreScreen extends StatelessWidget {
     required this.familyId,
   });
 
+  @override
+  State<MoreScreen> createState() => _MoreScreenState();
+}
+
+class _MoreScreenState extends State<MoreScreen> {
   static const String baseUrl = 'http://localhost:8080/api';
 
   @override
@@ -76,7 +82,7 @@ class MoreScreen extends StatelessWidget {
                 icon: Icons.home_repair_service_outlined,
                 iconColor: Colors.brown.shade400,
                 title: 'Home Maintenance',
-                onTap: () => _navigateTo(context, 'Home Maintenance'),
+                onTap: () => _navigateToMaintenance(context),
               ),
               _buildDivider(),
               _buildMenuItem(
@@ -151,7 +157,7 @@ class MoreScreen extends StatelessWidget {
 
     try {
       final response = await http.get(
-        Uri.parse('$baseUrl/families/$familyId/members'),
+        Uri.parse('$baseUrl/families/${widget.familyId}/members'),
       );
 
       if (!context.mounted) return;
@@ -166,8 +172,8 @@ class MoreScreen extends StatelessWidget {
           context,
           MaterialPageRoute(
             builder: (context) => HealthScreen(
-              userEmail: userEmail,
-              familyId: familyId,
+              userEmail: widget.userEmail,
+              familyId: widget.familyId,
               initialFamilyMembers: membersList,
             ),
           ),
@@ -180,7 +186,7 @@ class MoreScreen extends StatelessWidget {
       }
     } catch (e) {
       if (!context.mounted) return;
-      Navigator.pop(context); // Dismiss loading dialog safely
+      Navigator.pop(context);
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Connection error: $e')),
       );
@@ -192,8 +198,8 @@ class MoreScreen extends StatelessWidget {
       context,
       MaterialPageRoute(
         builder: (context) => ShoppingScreen(
-          userEmail: userEmail,
-          familyId: familyId,
+          userEmail: widget.userEmail,
+          familyId: widget.familyId,
         ),
       ),
     );
@@ -204,8 +210,20 @@ class MoreScreen extends StatelessWidget {
       context,
       MaterialPageRoute(
         builder: (context) => PlantsGardenScreen(
-          userEmail: userEmail,
-          familyId: familyId,
+          userEmail: widget.userEmail,
+          familyId: widget.familyId,
+        ),
+      ),
+    );
+  }
+
+  void _navigateToMaintenance(BuildContext context) {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => HomeMaintenanceScreen(
+          userEmail: widget.userEmail,
+          familyId: widget.familyId,
         ),
       ),
     );
