@@ -4,7 +4,8 @@ import 'package:http/http.dart' as http;
 import '../../health/screens/health_screen.dart';
 import '../../shopping/screens/shopping_screens.dart';
 import '../../garden/screens/plants_garden_screen.dart';
-import '../../maintenance/screens/home_maintenance_screen.dart'; 
+import '../../maintenance/screens/home_maintenance_screen.dart';
+import '../../together/screens/together_screen.dart'; 
 
 class MoreScreen extends StatefulWidget {
   final String userEmail;
@@ -89,7 +90,7 @@ class _MoreScreenState extends State<MoreScreen> {
                 icon: Icons.group_rounded,
                 iconColor: Colors.purple.shade600,
                 title: 'Together',
-                onTap: () => _navigateTo(context, 'Together'),
+                onTap: () => _navigateToTogether(context),
               ),
               _buildDivider(),
               _buildMenuItem(
@@ -222,6 +223,18 @@ class _MoreScreenState extends State<MoreScreen> {
       context,
       MaterialPageRoute(
         builder: (context) => HomeMaintenanceScreen(
+          userEmail: widget.userEmail,
+          familyId: widget.familyId,
+        ),
+      ),
+    );
+  }
+
+  void _navigateToTogether(BuildContext context) {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => TogetherScreen(
           userEmail: widget.userEmail,
           familyId: widget.familyId,
         ),

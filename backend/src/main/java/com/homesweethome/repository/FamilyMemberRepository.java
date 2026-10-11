@@ -14,6 +14,7 @@ import java.util.UUID;
 
 @Repository
 public interface FamilyMemberRepository extends JpaRepository<FamilyMember, UUID> {
+    boolean existsByFamilyIdAndUserEmail(UUID familyId, String email);
     
     // 1. Fetch memberships by email with user fetched
     @Query("SELECT fm FROM FamilyMember fm JOIN FETCH fm.user u WHERE u.email = :email")
