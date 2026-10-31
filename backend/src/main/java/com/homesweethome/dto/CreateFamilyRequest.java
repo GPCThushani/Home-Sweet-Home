@@ -1,11 +1,14 @@
 package com.homesweethome.dto;
 
+import java.util.List;
 import java.util.UUID;
 
 public record CreateFamilyRequest(
-    String familyName,
-    String timezone,
-    UUID creatorId,
-    String creatorNickname,
-    String avatarPath
+        UUID creatorId,
+        String familyName,
+        String timezone,
+        String creatorNickname,
+        String avatarPath,
+        List<FamilyProfileInput> members,
+        Integer creatorProfileIndex
 ) {}

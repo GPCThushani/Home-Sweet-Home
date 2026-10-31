@@ -1,7 +1,8 @@
+import 'package:mobile/core/services/api_config.dart';
 import 'dart:convert';
 import 'package:flutter/material.dart';
-import 'package:http/http.dart' as http;
-import 'package:shared_preferences/shared_preferences.dart';
+import 'package:mobile/core/services/authenticated_http.dart' as http;
+import '../../../core/services/auth_session.dart';
 import 'choose_family_screen.dart';
 import 'create_or_join_family_screen.dart';
 import 'sign_up_screen.dart';
@@ -39,7 +40,7 @@ class _LoginScreenState extends State<LoginScreen> {
     setState(() => _isLoading = true);
 
     try {
-      final url = Uri.parse('http://localhost:8080/api/users/login'); 
+      final url = Uri.parse('${ApiConfig.baseUrl}/users/login');
       
       final response = await http.post(
         url,
@@ -53,18 +54,11 @@ class _LoginScreenState extends State<LoginScreen> {
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
         
-        final token = data['token'] ?? data['accessToken'] ?? 'mock_jwt_token';
-        final userId = data['userId']?.toString();
-
-        final prefs = await SharedPreferences.getInstance();
-        await prefs.setString('jwt_token', token);
-        await prefs.setString('user_email', email);
-        if (userId != null) {
-          await prefs.setString('user_id', userId);
-        }
+        await AuthSession.save(Map<String, dynamic>.from(data as Map));
+        final token = data['token'] as String;
 
         // Check if the user already belongs to a family via backend API
-        final familyCheckUrl = Uri.parse('http://localhost:8080/api/families/user?email=$email');
+        final familyCheckUrl = Uri.parse('${ApiConfig.baseUrl}/families/user').replace(queryParameters: {'email': email});
         final familyResponse = await http.get(
           familyCheckUrl,
           headers: {
@@ -73,6 +67,9 @@ class _LoginScreenState extends State<LoginScreen> {
           },
         );
 
+        if (familyResponse.statusCode != 200) {
+          throw Exception("Could not load your families. Please try again.");
+        }
         bool hasFamily = false;
         if (familyResponse.statusCode == 200) {
           final List<dynamic> families = jsonDecode(familyResponse.body);
@@ -107,8 +104,12 @@ class _LoginScreenState extends State<LoginScreen> {
       } else {
         _showError("Login failed. Please try again.");
       }
+    } on AuthenticationException catch (e) {
+      if (mounted) _showError(e.message);
+    } on http.AuthorizationException catch (e) {
+      if (mounted) _showError(e.toString());
     } catch (e) {
-      _showError("Could not connect to server. Is Spring Boot running?");
+      if (mounted) _showError("Could not complete login. Please check your connection and try again.");
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }

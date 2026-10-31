@@ -1,0 +1,20 @@
+name: New Environment
+values:
+  - key: baseUrl
+    value: ''
+  - key: token
+    value: ''
+  - key: userId
+    value: ''
+  - key: userEmail
+    value: ''
+  - key: familyId
+    value: ''
+  - key: inviteCode
+    value: ''
+  - key: profileId
+    value: ''
+  - key: medicineId
+    value: ''
+  - key: '{{token}}'
+    secret: true

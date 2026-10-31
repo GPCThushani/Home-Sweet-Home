@@ -1,11 +1,9 @@
-import 'dart:convert';
 import 'package:flutter/material.dart';
-import 'package:http/http.dart' as http;
 import '../../health/screens/health_screen.dart';
 import '../../shopping/screens/shopping_screens.dart';
 import '../../garden/screens/plants_garden_screen.dart';
 import '../../maintenance/screens/home_maintenance_screen.dart';
-import '../../together/screens/together_screen.dart'; 
+import '../../together/screens/together_screen.dart';
 
 class MoreScreen extends StatefulWidget {
   final String userEmail;
@@ -22,8 +20,6 @@ class MoreScreen extends StatefulWidget {
 }
 
 class _MoreScreenState extends State<MoreScreen> {
-  static const String baseUrl = 'http://localhost:8080/api';
-
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -55,7 +51,7 @@ class _MoreScreenState extends State<MoreScreen> {
               ),
             ),
             const SizedBox(height: 12),
-            
+
             // --- MODULES SECTION ---
             _buildSectionContainer([
               _buildMenuItem(
@@ -150,48 +146,15 @@ class _MoreScreenState extends State<MoreScreen> {
   }
 
   Future<void> _navigateToHealth(BuildContext context) async {
-    showDialog(
-      context: context,
-      barrierDismissible: false,
-      builder: (_) => const Center(child: CircularProgressIndicator(color: Color(0xFF4A8B71))),
+    await Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => HealthScreen(
+          userEmail: widget.userEmail,
+          familyId: widget.familyId,
+        ),
+      ),
     );
-
-    try {
-      final response = await http.get(
-        Uri.parse('$baseUrl/families/${widget.familyId}/members'),
-      );
-
-      if (!context.mounted) return;
-      Navigator.pop(context); // Dismiss loading dialog safely
-
-      if (response.statusCode == 200) {
-        final List<dynamic> data = jsonDecode(response.body);
-        final membersList = data.map((m) => m as Map<String, dynamic>).toList();
-
-        if (!context.mounted) return;
-        Navigator.push(
-          context,
-          MaterialPageRoute(
-            builder: (context) => HealthScreen(
-              userEmail: widget.userEmail,
-              familyId: widget.familyId,
-              initialFamilyMembers: membersList,
-            ),
-          ),
-        );
-      } else {
-        if (!context.mounted) return;
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Could not fetch family members for Health module.')),
-        );
-      }
-    } catch (e) {
-      if (!context.mounted) return;
-      Navigator.pop(context);
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Connection error: $e')),
-      );
-    }
   }
 
   void _navigateToShopping(BuildContext context) {

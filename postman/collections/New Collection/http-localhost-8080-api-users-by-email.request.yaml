@@ -1,0 +1,11 @@
+$kind: http-request
+name: http://localhost:8080/api/users/by-email
+description: ""
+url: http://localhost:8080/api/users/by-email?email=perera@gmail.com
+method: GET
+queryParams:
+  - key: email
+    value: perera@gmail.com
+    disabled: false
+    description: ""
+order: 3416878874576063

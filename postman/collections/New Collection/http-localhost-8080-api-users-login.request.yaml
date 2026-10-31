@@ -1,0 +1,17 @@
+$kind: http-request
+name: http://localhost:8080/api/users/login
+description: ""
+url: http://localhost:8080/api/users/login
+method: POST
+body:
+  type: json
+  content: "\r
+
+    {\r
+
+    \  \"email\": \"perera@gmail.com\",\r
+
+    \  \"password\": \"P@123456\"\r
+
+    }\r\n"
+order: 1792334562246

@@ -6,4 +6,9 @@ public record AuthenticationResponse(
     String token,
     UUID userId,
     String email
-) {}
+) {
+    @Override
+    public String toString() {
+        return "AuthenticationResponse[redacted]";
+    }
+}

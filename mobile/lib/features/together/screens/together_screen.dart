@@ -1,9 +1,10 @@
+import 'package:mobile/shared/widgets/main_navigation_shell.dart';
+import 'package:mobile/core/services/api_config.dart';
 import 'dart:convert';
 import 'package:image_picker/image_picker.dart';
 import 'package:flutter/material.dart';
-import 'package:http/http.dart' as http;
+import 'package:mobile/core/services/authenticated_http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
-import '../../tasks/screens/global_tasks_screen.dart';
 
 class TogetherScreen extends StatefulWidget {
   final String userEmail;
@@ -20,9 +21,9 @@ class TogetherScreen extends StatefulWidget {
 }
 
 class _TogetherScreenState extends State<TogetherScreen> {
-  static const String baseUrl = 'http://localhost:8080/api/together';
-  static const String serverOrigin = 'http://localhost:8080';
-  int _currentNavIndex = 4;
+  static final String baseUrl = '${ApiConfig.baseUrl}/together';
+  static final String serverOrigin = ApiConfig.origin;
+  final int _currentNavIndex = 4;
   final List<TextEditingController> _modalControllers = [];
 
   @override
@@ -242,18 +243,7 @@ class _TogetherScreenState extends State<TogetherScreen> {
                                           child: ClipRRect(
                                             borderRadius: const BorderRadius.vertical(top: Radius.circular(15)),
                                             child: m['imageUrl'] != null && m['imageUrl'].toString().isNotEmpty
-                                                ? FutureBuilder<Map<String, String>>(
-                                                    future: _headers(),
-                                                    builder: (context, snapshot) => snapshot.hasData
-                                                        ? Image.network(
-                                                            _imageUrl(m['imageUrl'].toString()),
-                                                            headers: snapshot.data,
-                                                            fit: BoxFit.cover,
-                                                            width: double.infinity,
-                                                            errorBuilder: (_, __, ___) => _buildPlaceholderImage(),
-                                                          )
-                                                        : _buildPlaceholderImage(),
-                                                  )
+                                                ? _buildMemoryImage(m['imageUrl'].toString())
                                                 : _buildPlaceholderImage(),
                                           ),
                                         ),
@@ -300,25 +290,24 @@ class _TogetherScreenState extends State<TogetherScreen> {
             BottomNavigationBarItem(icon: Icon(Icons.task_outlined), activeIcon: Icon(Icons.task_rounded), label: 'Tasks'),
             BottomNavigationBarItem(icon: Icon(Icons.menu_outlined), activeIcon: Icon(Icons.menu_rounded), label: 'More'),
           ],
-          onTap: (index) {
-            setState(() => _currentNavIndex = index);
-            if (index == 3) {
-              Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (context) => GlobalTasksScreen(
-                    userEmail: widget.userEmail,
-                    familyId: widget.familyId,
-                  ),
-                ),
-              );
-            } else if (index != 4) {
-              Navigator.maybePop(context);
-            }
-          },
+          onTap: (index) => MainNavigationShell.navigate(context, userEmail: widget.userEmail, familyId: widget.familyId, index: index),
         ),
       ),
     );
+  }
+
+  Widget _buildMemoryImage(String value) {
+    final url = Uri.parse(_imageUrl(value));
+    final api = Uri.parse(ApiConfig.baseUrl);
+    if (url.origin != api.origin || !url.path.startsWith('${api.path}/')) {
+      return Image.network(url.toString(), fit: BoxFit.cover, width: double.infinity,
+        errorBuilder: (_, __, ___) => _buildPlaceholderImage());
+    }
+    return FutureBuilder<http.Response>(future: http.get(url), builder: (context, snapshot) {
+      if (!snapshot.hasData || snapshot.data!.statusCode != 200) return _buildPlaceholderImage();
+      return Image.memory(snapshot.data!.bodyBytes, fit: BoxFit.cover, width: double.infinity,
+        errorBuilder: (_, __, ___) => _buildPlaceholderImage());
+    });
   }
 
   String _imageUrl(String value) => value.startsWith('/') ? '$serverOrigin$value' : value;
@@ -619,7 +608,7 @@ class _TogetherScreenState extends State<TogetherScreen> {
                       filename: selectedPhoto!.name.isNotEmpty ? selectedPhoto!.name : 'memory.jpg',
                     ));
 
-                    final streamedResponse = await request.send();
+                    final streamedResponse = await http.send(request);
                     final upload = await http.Response.fromStream(streamedResponse);
                     if (upload.statusCode != 200 && upload.statusCode != 201) {
                       throw Exception('Photo upload failed (${upload.statusCode}): ${upload.body}');

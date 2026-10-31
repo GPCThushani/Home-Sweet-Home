@@ -15,6 +15,8 @@ class HomeFeaturesScreen extends StatefulWidget {
   final int? presetAvatarIndex;
   final int memberCount;
   final String userEmail;
+  final List<Map<String, dynamic>> familyMembers;
+  final int creatorProfileIndex;
 
   const HomeFeaturesScreen({
     super.key,
@@ -24,6 +26,8 @@ class HomeFeaturesScreen extends StatefulWidget {
     this.presetAvatarIndex,
     required this.memberCount,
     required this.userEmail,
+    required this.familyMembers,
+    required this.creatorProfileIndex,
   });
 
   @override
@@ -109,7 +113,6 @@ class _HomeFeaturesScreenState extends State<HomeFeaturesScreen> {
               const SizedBox(height: 16),
               ElevatedButton(
                 onPressed: () {
-                  // PASSES EVERYTHING ONWARD TO HOMEREADYSCREEN
                   Navigator.push(
                     context,
                     MaterialPageRoute(
@@ -120,6 +123,8 @@ class _HomeFeaturesScreenState extends State<HomeFeaturesScreen> {
                         presetAvatarIndex: widget.presetAvatarIndex,
                         memberCount: widget.memberCount,
                         userEmail: widget.userEmail,
+                        familyMembers: widget.familyMembers,
+                        creatorProfileIndex: widget.creatorProfileIndex,
                       ),
                     ),
                   );

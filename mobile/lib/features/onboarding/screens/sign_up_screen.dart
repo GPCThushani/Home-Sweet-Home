@@ -1,7 +1,8 @@
+import 'package:mobile/core/services/api_config.dart';
 import 'package:flutter/material.dart';
-import 'package:http/http.dart' as http;
+import 'package:mobile/core/services/authenticated_http.dart' as http;
 import 'dart:convert';
-import 'package:shared_preferences/shared_preferences.dart';
+import '../../../core/services/auth_session.dart';
 import 'create_or_join_family_screen.dart';
 
 class SignUpScreen extends StatefulWidget {
@@ -71,7 +72,7 @@ class _SignUpScreenState extends State<SignUpScreen> {
     setState(() => _isLoading = true);
 
     try {
-      final url = Uri.parse('http://localhost:8080/api/users/register');
+      final url = Uri.parse('${ApiConfig.baseUrl}/users/register');
       
       final response = await http.post(
         url,
@@ -85,17 +86,7 @@ class _SignUpScreenState extends State<SignUpScreen> {
       if (response.statusCode == 200 || response.statusCode == 201) {
         final data = jsonDecode(response.body);
         
-        final userId = data['userId']?.toString();
-        final token = data['token']?.toString();
-
-        final prefs = await SharedPreferences.getInstance();
-        await prefs.setString('user_email', email);
-        if (userId != null) {
-          await prefs.setString('user_id', userId);
-        }
-        if (token != null) {
-          await prefs.setString('jwt_token', token);
-        }
+        await AuthSession.save(Map<String, dynamic>.from(data as Map));
 
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
@@ -114,8 +105,10 @@ class _SignUpScreenState extends State<SignUpScreen> {
       } else {
         _showError("Something went wrong. Please try again later.");
       }
+    } on AuthenticationException catch (e) {
+      if (mounted) _showError(e.message);
     } catch (e) {
-      _showError("Could not connect to server. Is Spring Boot running?");
+      if (mounted) _showError("Could not connect to server. Is Spring Boot running?");
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }

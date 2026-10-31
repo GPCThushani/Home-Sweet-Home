@@ -1,19 +1,24 @@
+import 'package:mobile/shared/widgets/main_navigation_shell.dart';
 import 'dart:convert';
-import 'dart:io';
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
-import 'package:http/http.dart' as http;
-import '../../tasks/screens/global_tasks_screen.dart';
+import 'package:mobile/core/services/health_http.dart' as http;
+import '../../family/models/family_profile.dart';
+import '../../../../core/services/api_config.dart';
+import '../../../../core/services/health_api.dart';
 
 class HealthScreen extends StatefulWidget {
+  final http.HealthClient? client;
   final String userEmail;
   final String familyId;
   final List<Map<String, dynamic>> initialFamilyMembers;
 
   const HealthScreen({
     super.key,
+    this.client,
     required this.userEmail,
     required this.familyId,
-    required this.initialFamilyMembers,
+    this.initialFamilyMembers = const [],
   });
 
   @override
@@ -21,18 +26,28 @@ class HealthScreen extends StatefulWidget {
 }
 
 class _HealthScreenState extends State<HealthScreen> {
-  static const String baseUrl = 'http://localhost:8080/api';
+  static final String baseUrl = ApiConfig.baseUrl;
+  int _loadGeneration = 0;
+  late final http.HealthClient _http = widget.client ?? http.HealthClient();
 
-  late List<Map<String, dynamic>> _familyMembers;
+  @override
+  void dispose() {
+    _loadGeneration++;
+    if (widget.client == null) _http.close();
+    super.dispose();
+  }
+
+  List<Map<String, dynamic>> _familyMembers = [];
   String? _selectedMemberId;
   int _selectedTab = 0;
-  int _currentNavIndex = 4;
-  bool _isLoading = false;
+  final int _currentNavIndex = 4;
+  bool _isLoading = true;
   bool _isSaving = false;
   String? _errorMessage;
 
   Map<String, dynamic>? _profile;
   List<dynamic> _medicines = [];
+  List<dynamic> _medicineLogs = [];
   List<dynamic> _appointments = [];
   List<dynamic> _records = [];
   List<dynamic> _documents = [];
@@ -58,20 +73,100 @@ class _HealthScreenState extends State<HealthScreen> {
   @override
   void initState() {
     super.initState();
-    _familyMembers = widget.initialFamilyMembers
-        .map((member) => Map<String, dynamic>.from(member))
-        .toList();
+    _initializeMembers();
+  }
 
-    if (_familyMembers.isNotEmpty) {
-      _selectedMemberId = _getMemberId(_familyMembers.first)?.toString();
-      _loadSelectedMember();
+  @override
+  void didUpdateWidget(covariant HealthScreen oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.familyId != widget.familyId) {
+      _loadGeneration++;
+      _selectedMemberId = null;
+      _familyMembers = [];
+      _initializeMembers();
+    }
+  }
+
+  Future<void> _initializeMembers() async {
+    final generation = ++_loadGeneration;
+    setState(() {
+      _isLoading = true;
+      _errorMessage = null;
+    });
+
+    List<Map<String, dynamic>> members;
+    try {
+      final response = await _http.get(
+        Uri.parse('$baseUrl/families/${widget.familyId}/profiles'),
+      );
+      final decoded = jsonDecode(response.body);
+      if (decoded is! List) {
+        throw const FormatException('Invalid household profiles response');
+      }
+      members = decoded.map((item) {
+        final profile = FamilyProfile.fromJson(
+          Map<String, dynamic>.from(item as Map),
+        );
+        return <String, dynamic>{
+          'id': profile.id,
+          'name': profile.name,
+          'role': profile.relationship,
+          'gender': profile.gender,
+          'hasAccount': profile.hasAccount,
+          'isSelf': profile.isSelf,
+        };
+      }).toList();
+      if (members.map((member) => member['id']).toSet().length != members.length) {
+        throw const FormatException('The server returned duplicate household profiles');
+      }
+    } catch (e) {
+      if (mounted && generation == _loadGeneration) {
+        setState(() {
+          _isLoading = false;
+          _errorMessage = e.toString();
+        });
+      }
+      return;
+    }
+
+    if (!mounted || generation != _loadGeneration) return;
+
+    final previousMemberId = _selectedMemberId;
+    String? selectedId;
+
+    if (previousMemberId != null &&
+        members.any((member) => _getMemberId(member) == previousMemberId)) {
+      selectedId = previousMemberId;
+    } else if (members.isNotEmpty) {
+      selectedId = _getMemberId(members.first);
+    }
+
+    setState(() {
+      _familyMembers = members;
+      _selectedMemberId = selectedId;
+      _isLoading = false;
+      _errorMessage = null;
+
+      _profile = null;
+      _medicines = [];
+      _appointments = [];
+      _records = [];
+      _documents = [];
+      _cycles = [];
+      _symptomEntries = [];
+    });
+
+    if (selectedId != null) {
+      await _loadSelectedMember();
     }
   }
 
   String? _getMemberId(Map<String, dynamic> member) {
-    return member['id']?.toString() ??
-        member['memberId']?.toString() ??
-        member['familyMemberId']?.toString();
+    try {
+      return FamilyProfile.uuid(member['id']);
+    } catch (_) {
+      return null;
+    }
   }
 
   Map<String, dynamic>? get _selectedMember {
@@ -85,35 +180,21 @@ class _HealthScreenState extends State<HealthScreen> {
   }
 
   String _getFriendlyName(Map<String, dynamic> member) {
-    final nickname = member['nickname']?.toString().trim();
-    if (nickname != null && nickname.isNotEmpty && nickname.toLowerCase() != 'null' && nickname != 'Admin') {
-      return nickname;
-    }
-
     final name = member['name']?.toString().trim();
     if (name != null && name.isNotEmpty && name.toLowerCase() != 'null') {
       return name;
     }
-
-    if (member['user'] is Map) {
-      final user = Map<String, dynamic>.from(member['user']);
-      final userName = user['name']?.toString().trim();
-      if (userName != null && userName.isNotEmpty) return userName;
-      final email = user['email']?.toString();
-      if (email != null && email.contains('@')) return email.split('@').first;
-    }
-
+    final role = member['role']?.toString().trim();
+    if (role != null && role.isNotEmpty) return "$role's Name";
     return 'Family Member';
   }
 
   String _getFriendlyRole(Map<String, dynamic> member) {
     final role = member['role']?.toString().trim();
-    if (role != null && role.isNotEmpty) {
-      if (role.toUpperCase() == 'PARENT') return 'Parent';
-      if (role.toUpperCase() == 'CHILD') return 'Child';
-      return role[0].toUpperCase() + role.substring(1).toLowerCase();
+    if (role != null && role.isNotEmpty && role.toLowerCase() != 'null') {
+      return role[0].toUpperCase() + role.substring(1);
     }
-    return 'Family member';
+    return 'Member';
   }
 
   bool get _womensHealthEnabled {
@@ -122,42 +203,16 @@ class _HealthScreenState extends State<HealthScreen> {
   }
 
   String? _getAvatarUrl(Map<String, dynamic> member) {
-    final candidates = [
-      member['avatarPath'],
-      member['avatarUrl'],
-      member['imageUrl'],
-      member['photoUrl'],
-      member['profilePicture'],
-    ];
-
-    for (final value in candidates) {
-      final path = value?.toString().trim();
-      if (path != null && path.isNotEmpty && path.toLowerCase() != 'null') return path;
-    }
-
-    if (member['user'] is Map) {
-      final user = Map<String, dynamic>.from(member['user']);
-      final userCandidates = [
-        user['avatarPath'],
-        user['avatarUrl'],
-        user['imageUrl'],
-        user['photoUrl'],
-        user['profilePicture'],
-      ];
-      for (final value in userCandidates) {
-        final path = value?.toString().trim();
-        if (path != null && path.isNotEmpty && path.toLowerCase() != 'null') return path;
-      }
-    }
-
-    final name = _getFriendlyName(member).toLowerCase().trim();
     final role = member['role']?.toString().toLowerCase().trim() ?? '';
     final gender = member['gender']?.toString().toLowerCase().trim() ?? '';
 
-    if (name.contains('lily') || role.contains('daughter') || role.contains('girl')) {
-      return 'assets/images/family_members/daughter.jpg';
+    if (role.contains('grandfather') || role.contains('grandpa')) {
+      return 'assets/images/family_members/grandfather.jpg';
     }
-    if (role.contains('father') || role.contains('dad') || role.contains('parent')) {
+    if (role.contains('grandmother') || role.contains('grandma')) {
+      return 'assets/images/family_members/grandmother.jpg';
+    }
+    if (role.contains('father') || role.contains('dad')) {
       return 'assets/images/family_members/father.jpg';
     }
     if (role.contains('mother') || role.contains('mom')) {
@@ -166,46 +221,25 @@ class _HealthScreenState extends State<HealthScreen> {
     if (role.contains('son') || role.contains('boy')) {
       return 'assets/images/family_members/son.jpg';
     }
-    if (role.contains('grandfather') || role.contains('grandpa')) {
-      return 'assets/images/family_members/grandfather.jpg';
-    }
-    if (role.contains('grandmother') || role.contains('grandma')) {
-      return 'assets/images/family_members/grandmother.jpg';
+    if (role.contains('daughter') || role.contains('girl')) {
+      return 'assets/images/family_members/daughter.jpg';
     }
     if (gender == 'female') {
       return 'assets/images/family_members/female.jpg';
     }
-    
     return 'assets/images/family_members/male.jpg';
   }
 
   Widget _buildAvatar(Map<String, dynamic> member, {double radius = 30}) {
     final path = _getAvatarUrl(member);
 
-    if (path != null && path.isNotEmpty) {
-      if (path.startsWith('http')) {
-        return CircleAvatar(
-          radius: radius,
-          backgroundColor: paleGreen,
-          backgroundImage: NetworkImage(path),
-          onBackgroundImageError: (_, __) {},
-        );
-      } else if (path.startsWith('/') || path.startsWith('file://')) {
-        final cleanPath = path.replaceFirst('file://', '');
-        return CircleAvatar(
-          radius: radius,
-          backgroundColor: paleGreen,
-          backgroundImage: FileImage(File(cleanPath)),
-          onBackgroundImageError: (_, __) {},
-        );
-      } else if (path.startsWith('assets/')) {
-        return CircleAvatar(
-          radius: radius,
-          backgroundColor: paleGreen,
-          backgroundImage: AssetImage(path),
-          onBackgroundImageError: (_, __) {},
-        );
-      }
+    if (path != null && path.isNotEmpty && path.startsWith('assets/')) {
+      return CircleAvatar(
+        radius: radius,
+        backgroundColor: paleGreen,
+        backgroundImage: AssetImage(path),
+        onBackgroundImageError: (_, __) {},
+      );
     }
 
     return CircleAvatar(
@@ -227,12 +261,14 @@ class _HealthScreenState extends State<HealthScreen> {
     if (clean.isEmpty) return '?';
     final parts = clean.split(RegExp(r'\s+'));
     if (parts.length == 1) return parts.first.substring(0, 1).toUpperCase();
-    return (parts.first.substring(0, 1) + parts.last.substring(0, 1)).toUpperCase();
+    return (parts.first.substring(0, 1) + parts.last.substring(0, 1))
+        .toUpperCase();
   }
 
   Future<void> _loadSelectedMember() async {
     final memberId = _selectedMemberId;
     if (memberId == null) return;
+    final generation = ++_loadGeneration;
 
     setState(() {
       _isLoading = true;
@@ -246,6 +282,7 @@ class _HealthScreenState extends State<HealthScreen> {
         _getAppointments(widget.familyId, memberId),
         _getRecords(widget.familyId, memberId),
         _getDocuments(widget.familyId, memberId),
+        _getList('medicines/logs', widget.familyId, memberId),
       ]);
 
       final profile = results[0] as Map<String, dynamic>;
@@ -258,16 +295,34 @@ class _HealthScreenState extends State<HealthScreen> {
       List<dynamic> entries = [];
       if (profile['womensHealthEnabled'] == true) {
         cycles = await _getCycles(widget.familyId, memberId);
-        final startRange = DateTime(_displayedMonth.year, _displayedMonth.month - 1, 1);
-        final endRange = DateTime(_displayedMonth.year, _displayedMonth.month + 2, 0);
-        entries = await _getEntries(widget.familyId, memberId, startRange, endRange);
+        final startRange = DateTime(
+          _displayedMonth.year,
+          _displayedMonth.month - 1,
+          1,
+        );
+        final endRange = DateTime(
+          _displayedMonth.year,
+          _displayedMonth.month + 2,
+          0,
+        );
+        entries = await _getEntries(
+          widget.familyId,
+          memberId,
+          startRange,
+          endRange,
+        );
       }
 
-      if (!mounted) return;
+      if (!mounted ||
+          generation != _loadGeneration ||
+          memberId != _selectedMemberId) {
+        return;
+      }
 
       setState(() {
         _profile = profile;
         _medicines = medicines;
+        _medicineLogs = results[5] as List<dynamic>;
         _appointments = appointments;
         _records = records;
         _documents = documents;
@@ -280,78 +335,68 @@ class _HealthScreenState extends State<HealthScreen> {
         }
       });
     } catch (e) {
-      debugPrint('Health loading error: $e');
-      if (!mounted) return;
+      if (!mounted ||
+          generation != _loadGeneration ||
+          memberId != _selectedMemberId) {
+        return;
+      }
       setState(() {
         _isLoading = false;
-        _errorMessage = 'Could not load health information. Please check connection.';
+        _errorMessage = e.toString();
       });
     }
   }
 
-  Future<Map<String, dynamic>> _getProfile(String familyId, String memberId) async {
-    final response = await http.get(Uri.parse('$baseUrl/health/profile/$familyId/$memberId'));
-    if (response.statusCode == 404) return {};
-    if (response.statusCode != 200) throw Exception('Profile request failed');
-    final decoded = jsonDecode(response.body);
-    return decoded is Map<String, dynamic> ? decoded : {};
+  Future<Map<String, dynamic>> _getProfile(
+    String familyId,
+    String memberId,
+  ) async {
+    final response = await _http.get(
+      Uri.parse('$baseUrl/health/profile/$familyId/$memberId'),
+    );
+    return HealthApi.decodeProfile(response.body, familyId, memberId);
   }
 
-  Future<List<dynamic>> _getMedicines(String familyId, String memberId) async {
-    final response = await http.get(Uri.parse('$baseUrl/health/medicines/$familyId/$memberId'));
-    if (response.statusCode == 404) return [];
-    if (response.statusCode != 200) throw Exception('Medicine request failed');
-    final decoded = jsonDecode(response.body);
-    return decoded is List ? decoded : [];
+  Future<List<dynamic>> _getList(
+    String endpoint,
+    String familyId,
+    String memberId, [
+    String query = '',
+  ]) async {
+    final response = await _http.get(
+      Uri.parse('$baseUrl/health/$endpoint/$familyId/$memberId$query'),
+    );
+    return HealthApi.decodeList(response.body, familyId, memberId);
   }
 
-  Future<List<dynamic>> _getAppointments(String familyId, String memberId) async {
-    final response = await http.get(Uri.parse('$baseUrl/health/appointments/$familyId/$memberId'));
-    if (response.statusCode == 404) return [];
-    if (response.statusCode != 200) throw Exception('Appointment request failed');
-    final decoded = jsonDecode(response.body);
-    return decoded is List ? decoded : [];
-  }
-
-  Future<List<dynamic>> _getRecords(String familyId, String memberId) async {
-    final response = await http.get(Uri.parse('$baseUrl/health/records/$familyId/$memberId'));
-    if (response.statusCode == 404) return [];
-    if (response.statusCode != 200) throw Exception('Records request failed');
-    final decoded = jsonDecode(response.body);
-    return decoded is List ? decoded : [];
-  }
-
-  Future<List<dynamic>> _getDocuments(String familyId, String memberId) async {
-    final response = await http.get(Uri.parse('$baseUrl/health/documents/$familyId/$memberId'));
-    if (response.statusCode == 404) return [];
-    if (response.statusCode != 200) throw Exception('Documents request failed');
-    final decoded = jsonDecode(response.body);
-    return decoded is List ? decoded : [];
-  }
-
-  Future<List<dynamic>> _getCycles(String familyId, String memberId) async {
-    final response = await http.get(Uri.parse('$baseUrl/health/womens-health/cycles/$familyId/$memberId'));
-    if (response.statusCode == 404) return [];
-    if (response.statusCode != 200) throw Exception('Cycle request failed');
-    final decoded = jsonDecode(response.body);
-    return decoded is List ? decoded : [];
-  }
-
-  Future<List<dynamic>> _getEntries(String familyId, String memberId, DateTime start, DateTime end) async {
-    try {
-      final response = await http.get(Uri.parse('$baseUrl/health/womens-health/entries/$familyId/$memberId?start=${_formatDate(start)}&end=${_formatDate(end)}'));
-      if (response.statusCode == 200) {
-        final decoded = jsonDecode(response.body);
-        return decoded is List ? decoded : [];
-      }
-    } catch (_) {}
-    return [];
-  }
+  Future<List<dynamic>> _getMedicines(String f, String p) =>
+      _getList('medicines', f, p);
+  Future<List<dynamic>> _getAppointments(String f, String p) =>
+      _getList('appointments', f, p);
+  Future<List<dynamic>> _getRecords(String f, String p) =>
+      _getList('records', f, p);
+  Future<List<dynamic>> _getDocuments(String f, String p) =>
+      _getList('documents', f, p);
+  Future<List<dynamic>> _getCycles(String f, String p) =>
+      _getList('womens-health/cycles', f, p);
+  Future<List<dynamic>> _getEntries(
+    String f,
+    String p,
+    DateTime start,
+    DateTime end,
+  ) => _getList(
+    'womens-health/entries',
+    f,
+    p,
+    '?start=${_formatDate(start)}&end=${_formatDate(end)}',
+  );
 
   Future<void> _updateProfile(Map<String, dynamic> profile) async {
     if (_selectedMemberId == null) return;
-    final response = await http.put(
-      Uri.parse('$baseUrl/health/profile/${widget.familyId}/$_selectedMemberId'),
+    final response = await _http.put(
+      Uri.parse(
+        '$baseUrl/health/profile/${profile['familyId']}/${profile['familyMemberId']}',
+      ),
       headers: {'Content-Type': 'application/json'},
       body: jsonEncode(profile),
     );
@@ -359,16 +404,24 @@ class _HealthScreenState extends State<HealthScreen> {
   }
 
   Future<void> _deleteItem(String endpoint, dynamic id) async {
-    final response = await http.delete(Uri.parse('$baseUrl/health/$endpoint/$id'));
+    final response = await _http.delete(
+      Uri.parse('$baseUrl/health/$endpoint/$id'),
+    );
     if (response.statusCode != 200 && response.statusCode != 204) {
       throw Exception('Delete failed');
     }
   }
 
-  Future<void> _addCycle({required DateTime startDate, DateTime? endDate, String? notes}) async {
+  Future<void> _addCycle({
+    required DateTime startDate,
+    DateTime? endDate,
+    String? notes,
+  }) async {
     if (_selectedMemberId == null) return;
-    final response = await http.post(
-      Uri.parse('$baseUrl/health/womens-health/cycles/${widget.familyId}/$_selectedMemberId'),
+    final response = await _http.post(
+      Uri.parse(
+        '$baseUrl/health/womens-health/cycles/${widget.familyId}/$_selectedMemberId',
+      ),
       headers: {'Content-Type': 'application/json'},
       body: jsonEncode({
         'startDate': _formatDate(startDate),
@@ -382,8 +435,14 @@ class _HealthScreenState extends State<HealthScreen> {
   }
 
   Future<void> _endCycle(int cycleId, DateTime endDate) async {
-    final response = await http.put(Uri.parse('$baseUrl/health/womens-health/cycles/$cycleId/end?endDate=${_formatDate(endDate)}'));
-    if (response.statusCode != 200) throw Exception('Cycle end failed');
+    final response = await _http.put(
+      Uri.parse(
+        '$baseUrl/health/womens-health/cycles/$cycleId/end?endDate=${_formatDate(endDate)}',
+      ),
+    );
+    if (response.statusCode != 200) {
+      throw Exception('Cycle end failed');
+    }
   }
 
   String _formatDate(DateTime date) {
@@ -397,7 +456,7 @@ class _HealthScreenState extends State<HealthScreen> {
     try {
       final date = DateTime.parse(value);
       return '${date.day.toString().padLeft(2, '0')}/${date.month.toString().padLeft(2, '0')}/${date.year} • ${date.hour.toString().padLeft(2, '0')}:${date.minute.toString().padLeft(2, '0')}';
-    } catch (_) {
+    } catch (e) {
       return value;
     }
   }
@@ -408,11 +467,12 @@ class _HealthScreenState extends State<HealthScreen> {
       final dob = DateTime.parse(value);
       final today = DateTime.now();
       int age = today.year - dob.year;
-      if (today.month < dob.month || (today.month == dob.month && today.day < dob.day)) {
+      if (today.month < dob.month ||
+          (today.month == dob.month && today.day < dob.day)) {
         age--;
       }
       return age;
-    } catch (_) {
+    } catch (e) {
       return 0;
     }
   }
@@ -438,8 +498,15 @@ class _HealthScreenState extends State<HealthScreen> {
               padding: const EdgeInsets.fromLTRB(16, 16, 16, 14),
               decoration: BoxDecoration(
                 color: paleGreen.withValues(alpha: 0.7),
-                borderRadius: const BorderRadius.vertical(bottom: Radius.circular(20)),
-                border: Border(bottom: BorderSide(color: green.withValues(alpha: 0.2), width: 1.5)),
+                borderRadius: const BorderRadius.vertical(
+                  bottom: Radius.circular(20),
+                ),
+                border: Border(
+                  bottom: BorderSide(
+                    color: green.withValues(alpha: 0.2),
+                    width: 1.5,
+                  ),
+                ),
                 boxShadow: [
                   BoxShadow(
                     color: green.withValues(alpha: 0.06),
@@ -451,16 +518,30 @@ class _HealthScreenState extends State<HealthScreen> {
               child: Row(
                 children: [
                   IconButton(
-                    icon: const Icon(Icons.arrow_back_ios_new_rounded, color: textDark, size: 20),
+                    icon: const Icon(
+                      Icons.arrow_back_ios_new_rounded,
+                      color: textDark,
+                      size: 20,
+                    ),
                     onPressed: () => Navigator.maybePop(context),
                   ),
                   const SizedBox(width: 4),
                   const Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text('Health & Medicine', style: TextStyle(color: textDark, fontSize: 20, fontWeight: FontWeight.w800)),
+                      Text(
+                        'Health & Medicine',
+                        style: TextStyle(
+                          color: textDark,
+                          fontSize: 20,
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
                       SizedBox(height: 2),
-                      Text('A safe place for your family’s health.', style: TextStyle(color: textSecondary, fontSize: 11)),
+                      Text(
+                        'A safe place for your family’s health.',
+                        style: TextStyle(color: textSecondary, fontSize: 11),
+                      ),
                     ],
                   ),
                 ],
@@ -471,22 +552,29 @@ class _HealthScreenState extends State<HealthScreen> {
             if (_familyMembers.isNotEmpty) _buildTabs(),
             Expanded(
               child: _familyMembers.isEmpty
-                  ? _buildNoFamilyMembers()
+                  ? (_isLoading
+                        ? const Center(
+                            child: CircularProgressIndicator(color: green),
+                          )
+                        : _errorMessage != null
+                        ? _buildErrorState()
+                        : _buildNoFamilyMembers())
                   : _isLoading
-                      ? const Center(child: CircularProgressIndicator(color: green))
-                      : _errorMessage != null
-                          ? _buildErrorState()
-                          : RefreshIndicator(
-                              color: green,
-                              backgroundColor: white,
-                              onRefresh: _loadSelectedMember,
-                              child: _buildContent(member),
-                            ),
+                  ? const Center(child: CircularProgressIndicator(color: green))
+                  : _errorMessage != null
+                  ? _buildErrorState()
+                  : RefreshIndicator(
+                      color: green,
+                      backgroundColor: white,
+                      onRefresh: _loadSelectedMember,
+                      child: _buildContent(member),
+                    ),
             ),
           ],
         ),
       ),
-      floatingActionButton: _familyMembers.isEmpty
+      floatingActionButton:
+          _familyMembers.isEmpty || _isLoading || _errorMessage != null
           ? null
           : FloatingActionButton(
               backgroundColor: forest,
@@ -509,13 +597,31 @@ class _HealthScreenState extends State<HealthScreen> {
             Container(
               width: 84,
               height: 84,
-              decoration: const BoxDecoration(color: paleGreen, shape: BoxShape.circle),
-              child: const Icon(Icons.family_restroom_rounded, size: 42, color: forest),
+              decoration: const BoxDecoration(
+                color: paleGreen,
+                shape: BoxShape.circle,
+              ),
+              child: const Icon(
+                Icons.family_restroom_rounded,
+                size: 42,
+                color: forest,
+              ),
             ),
             const SizedBox(height: 20),
-            const Text('No family members yet', style: TextStyle(color: textDark, fontSize: 19, fontWeight: FontWeight.w800)),
+            const Text(
+              'No family members yet',
+              style: TextStyle(
+                color: textDark,
+                fontSize: 19,
+                fontWeight: FontWeight.w800,
+              ),
+            ),
             const SizedBox(height: 8),
-            Text('Add family members during Family Setup to manage their health information here.', textAlign: TextAlign.center, style: TextStyle(color: Colors.grey.shade600, height: 1.5)),
+            Text(
+              'Add family members during Family Setup to manage their health information here.',
+              textAlign: TextAlign.center,
+              style: TextStyle(color: Colors.grey.shade600, height: 1.5),
+            ),
           ],
         ),
       ),
@@ -541,12 +647,13 @@ class _HealthScreenState extends State<HealthScreen> {
             onTap: id == null
                 ? null
                 : () {
-                    if (id == _selectedMemberId) return;
+                    if (_isSaving || id == _selectedMemberId) return;
                     setState(() {
                       _selectedMemberId = id;
                       _selectedTab = 0;
                       _profile = null;
                       _medicines = [];
+                      _medicineLogs = [];
                       _appointments = [];
                       _records = [];
                       _documents = [];
@@ -566,7 +673,10 @@ class _HealthScreenState extends State<HealthScreen> {
                         padding: const EdgeInsets.all(2),
                         decoration: BoxDecoration(
                           shape: BoxShape.circle,
-                          border: Border.all(color: selected ? green : Colors.transparent, width: 2.5),
+                          border: Border.all(
+                            color: selected ? green : Colors.transparent,
+                            width: 2.5,
+                          ),
                         ),
                         child: _buildAvatar(member, radius: 28),
                       ),
@@ -577,8 +687,15 @@ class _HealthScreenState extends State<HealthScreen> {
                           child: Container(
                             width: 20,
                             height: 20,
-                            decoration: const BoxDecoration(color: green, shape: BoxShape.circle),
-                            child: const Icon(Icons.check_rounded, size: 13, color: white),
+                            decoration: const BoxDecoration(
+                              color: green,
+                              shape: BoxShape.circle,
+                            ),
+                            child: const Icon(
+                              Icons.check_rounded,
+                              size: 13,
+                              color: white,
+                            ),
                           ),
                         ),
                     ],
@@ -611,7 +728,13 @@ class _HealthScreenState extends State<HealthScreen> {
   }
 
   List<String> _getTabs() {
-    final tabs = ['Overview', 'Medicines', 'Appointments', 'Records', 'Documents'];
+    final tabs = [
+      'Overview',
+      'Medicines',
+      'Appointments',
+      'Records',
+      'Documents',
+    ];
     if (_womensHealthEnabled) tabs.add("Women's Health");
     return tabs;
   }
@@ -633,7 +756,10 @@ class _HealthScreenState extends State<HealthScreen> {
               onTap: () => setState(() => _selectedTab = index),
               child: AnimatedContainer(
                 duration: const Duration(milliseconds: 180),
-                padding: const EdgeInsets.symmetric(horizontal: 15, vertical: 9),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 15,
+                  vertical: 9,
+                ),
                 decoration: BoxDecoration(
                   color: selected ? forest : white,
                   borderRadius: BorderRadius.circular(12),
@@ -659,7 +785,10 @@ class _HealthScreenState extends State<HealthScreen> {
     if (member == null) {
       return ListView(
         physics: const AlwaysScrollableScrollPhysics(),
-        children: const [SizedBox(height: 100), Center(child: Text('Select a family member.'))],
+        children: const [
+          SizedBox(height: 100),
+          Center(child: Text('Select a family member.')),
+        ],
       );
     }
 
@@ -697,7 +826,11 @@ class _HealthScreenState extends State<HealthScreen> {
         borderRadius: BorderRadius.circular(20),
         border: Border.all(color: border),
         boxShadow: [
-          BoxShadow(color: Colors.black.withValues(alpha: 0.025), blurRadius: 10, offset: const Offset(0, 4)),
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.025),
+            blurRadius: 10,
+            offset: const Offset(0, 4),
+          ),
         ],
       ),
       child: Column(
@@ -710,9 +843,22 @@ class _HealthScreenState extends State<HealthScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(name, style: const TextStyle(color: textDark, fontSize: 17, fontWeight: FontWeight.w800)),
+                    Text(
+                      name,
+                      style: const TextStyle(
+                        color: textDark,
+                        fontSize: 17,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
                     const SizedBox(height: 3),
-                    Text('$relationship${age > 0 ? " • $age years" : ""}', style: const TextStyle(color: textSecondary, fontSize: 12)),
+                    Text(
+                      '$relationship${age > 0 ? " • $age years" : ""}',
+                      style: const TextStyle(
+                        color: textSecondary,
+                        fontSize: 12,
+                      ),
+                    ),
                   ],
                 ),
               ),
@@ -721,9 +867,14 @@ class _HealthScreenState extends State<HealthScreen> {
                 style: OutlinedButton.styleFrom(
                   foregroundColor: terracotta,
                   side: const BorderSide(color: Color(0xFFE9B7AC)),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(10),
+                  ),
                 ),
-                child: const Text('Emergency', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 11)),
+                child: const Text(
+                  'Emergency',
+                  style: TextStyle(fontWeight: FontWeight.w700, fontSize: 11),
+                ),
               ),
             ],
           ),
@@ -743,7 +894,10 @@ class _HealthScreenState extends State<HealthScreen> {
             child: TextButton.icon(
               onPressed: () => _showEditProfileModal(member),
               icon: const Icon(Icons.edit_outlined, size: 15, color: green),
-              label: const Text('Edit health profile', style: TextStyle(color: green, fontWeight: FontWeight.w700)),
+              label: const Text(
+                'Edit health profile',
+                style: TextStyle(color: green, fontWeight: FontWeight.w700),
+              ),
             ),
           ),
         ],
@@ -757,7 +911,16 @@ class _HealthScreenState extends State<HealthScreen> {
       children: [
         Text(label, style: const TextStyle(color: muted, fontSize: 10)),
         const SizedBox(height: 3),
-        Text(value, maxLines: 2, overflow: TextOverflow.ellipsis, style: const TextStyle(color: textDark, fontSize: 12, fontWeight: FontWeight.w700)),
+        Text(
+          value,
+          maxLines: 2,
+          overflow: TextOverflow.ellipsis,
+          style: const TextStyle(
+            color: textDark,
+            fontSize: 12,
+            fontWeight: FontWeight.w700,
+          ),
+        ),
       ],
     );
   }
@@ -778,8 +941,18 @@ class _HealthScreenState extends State<HealthScreen> {
           physics: const NeverScrollableScrollPhysics(),
           children: [
             _statCard('Blood Type', _value(profile['bloodType'])),
-            _statCard('Height', profile['heightCm'] != null ? '${profile["heightCm"]} cm' : 'Not added'),
-            _statCard('Weight', profile['weightKg'] != null ? '${profile["weightKg"]} kg' : 'Not added'),
+            _statCard(
+              'Height',
+              profile['heightCm'] != null
+                  ? '${profile["heightCm"]} cm'
+                  : 'Not added',
+            ),
+            _statCard(
+              'Weight',
+              profile['weightKg'] != null
+                  ? '${profile["weightKg"]} kg'
+                  : 'Not added',
+            ),
             _statCard('Date of Birth', _value(profile['dateOfBirth'])),
           ],
         ),
@@ -794,9 +967,18 @@ class _HealthScreenState extends State<HealthScreen> {
           children: [
             _profileRow('Known conditions', _value(profile['knownConditions'])),
             _profileRow('Allergies', _value(profile['allergies'])),
-            _profileRow('Previous surgeries', _value(profile['previousSurgeries'])),
-            _profileRow('Previous hospitalizations', _value(profile['previousHospitalizations'])),
-            _profileRow('Special notes', _value(profile['specialMedicalNotes'])),
+            _profileRow(
+              'Previous surgeries',
+              _value(profile['previousSurgeries']),
+            ),
+            _profileRow(
+              'Previous hospitalizations',
+              _value(profile['previousHospitalizations']),
+            ),
+            _profileRow(
+              'Special notes',
+              _value(profile['specialMedicalNotes']),
+            ),
           ],
         ),
         const SizedBox(height: 18),
@@ -806,7 +988,10 @@ class _HealthScreenState extends State<HealthScreen> {
           children: [
             _profileRow('Doctor', _value(profile['primaryPhysicianName'])),
             _profileRow('Phone', _value(profile['primaryPhysicianPhone'])),
-            _profileRow('Hospital / Clinic', _value(profile['hospitalOrClinic'])),
+            _profileRow(
+              'Hospital / Clinic',
+              _value(profile['hospitalOrClinic']),
+            ),
           ],
         ),
         const SizedBox(height: 18),
@@ -815,7 +1000,10 @@ class _HealthScreenState extends State<HealthScreen> {
         _infoCard(
           children: [
             _profileRow('Provider', _value(profile['insuranceProvider'])),
-            _profileRow('Policy number', _value(profile['insurancePolicyNumber'])),
+            _profileRow(
+              'Policy number',
+              _value(profile['insurancePolicyNumber']),
+            ),
             _profileRow('Expiry', _value(profile['insuranceExpiryDate'])),
           ],
         ),
@@ -837,23 +1025,49 @@ class _HealthScreenState extends State<HealthScreen> {
             Container(
               width: 42,
               height: 42,
-              decoration: const BoxDecoration(color: white, shape: BoxShape.circle),
-              child: const Icon(Icons.favorite_border_rounded, color: terracotta),
+              decoration: const BoxDecoration(
+                color: white,
+                shape: BoxShape.circle,
+              ),
+              child: const Icon(
+                Icons.favorite_border_rounded,
+                color: terracotta,
+              ),
             ),
             const SizedBox(width: 12),
             const Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text("Women's Health is enabled", style: TextStyle(color: textDark, fontWeight: FontWeight.w800, fontSize: 13)),
+                  Text(
+                    "Women's Health is enabled",
+                    style: TextStyle(
+                      color: textDark,
+                      fontWeight: FontWeight.w800,
+                      fontSize: 13,
+                    ),
+                  ),
                   SizedBox(height: 3),
-                  Text('Private period and cycle tracking is available for this member.', style: TextStyle(color: textSecondary, fontSize: 11, height: 1.35)),
+                  Text(
+                    'Private period and cycle tracking is available for this member.',
+                    style: TextStyle(
+                      color: textSecondary,
+                      fontSize: 11,
+                      height: 1.35,
+                    ),
+                  ),
                 ],
               ),
             ),
             TextButton(
               onPressed: () => _showEditProfileModal(_selectedMember ?? {}),
-              child: const Text('Manage', style: TextStyle(color: terracotta, fontWeight: FontWeight.w800)),
+              child: const Text(
+                'Manage',
+                style: TextStyle(
+                  color: terracotta,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
             ),
           ],
         ),
@@ -873,7 +1087,10 @@ class _HealthScreenState extends State<HealthScreen> {
           Container(
             width: 42,
             height: 42,
-            decoration: const BoxDecoration(color: peach, shape: BoxShape.circle),
+            decoration: const BoxDecoration(
+              color: peach,
+              shape: BoxShape.circle,
+            ),
             child: const Icon(Icons.calendar_month_outlined, color: terracotta),
           ),
           const SizedBox(width: 12),
@@ -881,9 +1098,23 @@ class _HealthScreenState extends State<HealthScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text('Would you like period tracking?', style: TextStyle(color: textDark, fontWeight: FontWeight.w800, fontSize: 13)),
+                Text(
+                  'Would you like period tracking?',
+                  style: TextStyle(
+                    color: textDark,
+                    fontWeight: FontWeight.w800,
+                    fontSize: 13,
+                  ),
+                ),
                 SizedBox(height: 4),
-                Text('This is optional and is set separately for each family member.', style: TextStyle(color: textSecondary, fontSize: 11, height: 1.4)),
+                Text(
+                  'This is optional and is set separately for each family member.',
+                  style: TextStyle(
+                    color: textSecondary,
+                    fontSize: 11,
+                    height: 1.4,
+                  ),
+                ),
               ],
             ),
           ),
@@ -893,9 +1124,14 @@ class _HealthScreenState extends State<HealthScreen> {
             style: OutlinedButton.styleFrom(
               foregroundColor: terracotta,
               side: const BorderSide(color: Color(0xFFE3B2A4)),
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(10),
+              ),
             ),
-            child: const Text('Set up', style: TextStyle(fontWeight: FontWeight.w800, fontSize: 11)),
+            child: const Text(
+              'Set up',
+              style: TextStyle(fontWeight: FontWeight.w800, fontSize: 11),
+            ),
           ),
         ],
       ),
@@ -908,7 +1144,10 @@ class _HealthScreenState extends State<HealthScreen> {
       children: [
         _sectionTitle('Medicines'),
         const SizedBox(height: 4),
-        const Text('Current medicines, schedules and refill information.', style: TextStyle(color: textSecondary, fontSize: 11)),
+        const Text(
+          'Current medicines, schedules and refill information.',
+          style: TextStyle(color: textSecondary, fontSize: 11),
+        ),
         const SizedBox(height: 12),
         if (_medicines.isEmpty)
           _emptyState(
@@ -919,10 +1158,39 @@ class _HealthScreenState extends State<HealthScreen> {
             onPressed: () => _showAddMedicineModal(),
           )
         else
-          ..._medicines.map((medicine) => Padding(
-                padding: const EdgeInsets.only(bottom: 10),
-                child: _medicineCard(medicine),
-              )),
+          ..._medicines.map(
+            (medicine) => Padding(
+              padding: const EdgeInsets.only(bottom: 10),
+              child: _medicineCard(medicine),
+            ),
+          ),
+        if (_medicines.isNotEmpty)
+          TextButton.icon(
+            onPressed: () => _showAddMedicineModal(),
+            icon: const Icon(Icons.add),
+            label: const Text('Add medicine'),
+          ),
+        const SizedBox(height: 12),
+        _sectionTitle('Medication history'),
+        if (_medicineLogs.isEmpty)
+          const Text(
+            'No medication logs yet.',
+            style: TextStyle(color: textSecondary),
+          ),
+        ..._medicineLogs.map(
+          (log) => ListTile(
+            contentPadding: EdgeInsets.zero,
+            title: Text(
+              _medicines
+                      .where((m) => m['id'] == log['medicineId'])
+                      .map((m) => m['name'].toString())
+                      .firstOrNull ??
+                  'Archived medicine',
+            ),
+            subtitle: Text(log['scheduledAt'].toString().replaceAll('T', ' ')),
+            trailing: Text(log['status'].toString()),
+          ),
+        ),
       ],
     );
   }
@@ -949,23 +1217,64 @@ class _HealthScreenState extends State<HealthScreen> {
                   children: [
                     Row(
                       children: [
-                        Expanded(child: Text(name, style: const TextStyle(color: textDark, fontSize: 15, fontWeight: FontWeight.w800))),
+                        Expanded(
+                          child: Text(
+                            name,
+                            style: const TextStyle(
+                              color: textDark,
+                              fontSize: 15,
+                              fontWeight: FontWeight.w800,
+                            ),
+                          ),
+                        ),
                         if (isLowStock)
                           Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                            decoration: BoxDecoration(color: const Color(0xFFFFECE5), borderRadius: BorderRadius.circular(6)),
-                            child: const Text('REFILL SOON', style: TextStyle(color: terracotta, fontSize: 9, fontWeight: FontWeight.w800)),
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 8,
+                              vertical: 3,
+                            ),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFFFFECE5),
+                              borderRadius: BorderRadius.circular(6),
+                            ),
+                            child: const Text(
+                              'REFILL SOON',
+                              style: TextStyle(
+                                color: terracotta,
+                                fontSize: 9,
+                                fontWeight: FontWeight.w800,
+                              ),
+                            ),
                           ),
                       ],
                     ),
                     const SizedBox(height: 4),
-                    Text(dosage, style: const TextStyle(color: textSecondary, fontSize: 12)),
+                    Text(
+                      dosage,
+                      style: const TextStyle(
+                        color: textSecondary,
+                        fontSize: 12,
+                      ),
+                    ),
                     const SizedBox(height: 3),
-                    Text(frequency, style: const TextStyle(color: textSecondary, fontSize: 12)),
+                    Text(
+                      frequency,
+                      style: const TextStyle(
+                        color: textSecondary,
+                        fontSize: 12,
+                      ),
+                    ),
                     if (remaining != null)
                       Padding(
                         padding: const EdgeInsets.only(top: 6),
-                        child: Text('Remaining: $remaining pills', style: TextStyle(color: isLowStock ? terracotta : green, fontSize: 11, fontWeight: FontWeight.w700)),
+                        child: Text(
+                          'Remaining: $remaining pills',
+                          style: TextStyle(
+                            color: isLowStock ? terracotta : green,
+                            fontSize: 11,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
                       ),
                   ],
                 ),
@@ -973,16 +1282,24 @@ class _HealthScreenState extends State<HealthScreen> {
               PopupMenuButton<String>(
                 icon: const Icon(Icons.more_vert_rounded, color: muted),
                 onSelected: (value) async {
+                  if (value == 'schedules') await _showSchedules(map);
                   if (value == 'edit') _showAddMedicineModal(existing: map);
                   if (value == 'delete' && id != null) {
                     try {
                       await _deleteItem('medicines', id);
                       if (!mounted) return;
                       await _loadSelectedMember();
-                    } catch (_) {}
+                    } catch (e) {
+                      if (mounted) {
+                        ScaffoldMessenger.of(
+                          context,
+                        ).showSnackBar(SnackBar(content: Text(e.toString())));
+                      }
+                    }
                   }
                 },
                 itemBuilder: (_) => const [
+                  PopupMenuItem(value: 'schedules', child: Text('Schedules')),
                   PopupMenuItem(value: 'edit', child: Text('Edit')),
                   PopupMenuItem(value: 'delete', child: Text('Delete')),
                 ],
@@ -994,38 +1311,160 @@ class _HealthScreenState extends State<HealthScreen> {
             width: double.infinity,
             height: 36,
             child: ElevatedButton.icon(
-              onPressed: id == null ? null : () async {
-                try {
-                  await http.post(
-                    Uri.parse('$baseUrl/health/medicines/logs'),
-                    headers: {'Content-Type': 'application/json'},
-                    body: jsonEncode({
-                      'familyId': widget.familyId,
-                      'familyMemberId': _selectedMemberId,
-                      'medicineId': id,
-                      'scheduledAt': DateTime.now().toIso8601String(),
-                      'status': 'TAKEN',
-                      'recordedByMemberId': _selectedMemberId,
-                    }),
-                  );
-                  if (!mounted) return;
-                  await _loadSelectedMember();
-                  // ignore: use_build_context_synchronously
-                  // ignore: use_build_context_synchronously
-                  ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Medicine marked as taken! Stock updated.')));
-                } catch (_) {
-                  // ignore: use_build_context_synchronously
-                  ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Could not log medicine adherence.')));
-                }
-              },
+              onPressed: id == null || _isSaving
+                  ? null
+                  : () async {
+                      if (_isSaving) return;
+                      setState(() => _isSaving = true);
+                      try {
+                        await _http.post(
+                          Uri.parse('$baseUrl/health/medicines/logs'),
+                          headers: {'Content-Type': 'application/json'},
+                          body: jsonEncode({
+                            'familyId': widget.familyId,
+                            'familyMemberId': _selectedMemberId,
+                            'medicineId': id,
+                            'scheduledAt': DateTime.now().toIso8601String(),
+                            'status': 'TAKEN',
+                          }),
+                        );
+                        if (!mounted) return;
+                        await _loadSelectedMember();
+                        // ignore: use_build_context_synchronously
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(
+                            content: Text(
+                              'Medicine marked as taken! Stock updated.',
+                            ),
+                          ),
+                        );
+                      } catch (e) {
+                        if (mounted) {
+                          ScaffoldMessenger.of(
+                            context,
+                          ).showSnackBar(SnackBar(content: Text(e.toString())));
+                        }
+                      } finally {
+                        if (mounted) setState(() => _isSaving = false);
+                      }
+                    },
               icon: const Icon(Icons.check_circle_outline_rounded, size: 16),
-              label: const Text('Take Dose', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700)),
-              style: ElevatedButton.styleFrom(backgroundColor: paleGreen, foregroundColor: forest, elevation: 0, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10))),
+              label: const Text(
+                'Take Dose',
+                style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700),
+              ),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: paleGreen,
+                foregroundColor: forest,
+                elevation: 0,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(10),
+                ),
+              ),
             ),
           ),
         ],
       ),
     );
+  }
+
+  Future<void> _showSchedules(Map<String, dynamic> medicine) async {
+    final profileId = _selectedMemberId;
+    try {
+      final response = await _http.get(
+        Uri.parse('$baseUrl/health/medicines/${medicine['id']}/schedules'),
+      );
+      final schedules = jsonDecode(response.body) as List;
+      if (!mounted || _selectedMemberId != profileId) return;
+      await showDialog<void>(
+        context: context,
+        builder: (dialogContext) => StatefulBuilder(
+          builder: (dialogContext, update) => AlertDialog(
+            title: Text('Schedules: ${medicine['name']}'),
+            content: SizedBox(
+              width: 320,
+              child: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    if (schedules.isEmpty) const Text('No scheduled doses.'),
+                    ...schedules.map(
+                      (schedule) => ListTile(
+                        title: Text(schedule['scheduledTime'].toString()),
+                        trailing: IconButton(
+                          icon: const Icon(Icons.delete_outline),
+                          onPressed: () async {
+                            try {
+                              await _http.delete(
+                                Uri.parse(
+                                  '$baseUrl/health/medicines/schedules/${schedule['id']}',
+                                ),
+                              );
+                              if (dialogContext.mounted) {
+                                update(() => schedules.remove(schedule));
+                              }
+                            } catch (e) {
+                              if (mounted) {
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  SnackBar(content: Text(e.toString())),
+                                );
+                              }
+                            }
+                          },
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () async {
+                  final time = await showTimePicker(
+                    context: dialogContext,
+                    initialTime: TimeOfDay.now(),
+                  );
+                  if (time == null || !dialogContext.mounted) return;
+                  try {
+                    final created = await _http.post(
+                      Uri.parse(
+                        '$baseUrl/health/medicines/${medicine['id']}/schedules',
+                      ),
+                      headers: {'Content-Type': 'application/json'},
+                      body: jsonEncode({
+                        'scheduledTime':
+                            '${time.hour.toString().padLeft(2, '0')}:${time.minute.toString().padLeft(2, '0')}:00',
+                      }),
+                    );
+                    if (dialogContext.mounted) {
+                      update(() => schedules.add(jsonDecode(created.body)));
+                    }
+                  } catch (e) {
+                    if (mounted) {
+                      ScaffoldMessenger.of(
+                        context,
+                      ).showSnackBar(SnackBar(content: Text(e.toString())));
+                    }
+                  }
+                },
+                child: const Text('Add time'),
+              ),
+              TextButton(
+                onPressed: () => Navigator.pop(dialogContext),
+                child: const Text('Close'),
+              ),
+            ],
+          ),
+        ),
+      );
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(e.toString())));
+      }
+    }
   }
 
   Widget _buildAppointments() {
@@ -1034,7 +1473,10 @@ class _HealthScreenState extends State<HealthScreen> {
       children: [
         _sectionTitle('Appointments'),
         const SizedBox(height: 4),
-        const Text('Doctor visits and follow-ups.', style: TextStyle(color: textSecondary, fontSize: 11)),
+        const Text(
+          'Doctor visits and follow-ups.',
+          style: TextStyle(color: textSecondary, fontSize: 11),
+        ),
         const SizedBox(height: 12),
         if (_appointments.isEmpty)
           _emptyState(
@@ -1045,10 +1487,12 @@ class _HealthScreenState extends State<HealthScreen> {
             onPressed: () => _showAddAppointmentModal(),
           )
         else
-          ..._appointments.map((appointment) => Padding(
-                padding: const EdgeInsets.only(bottom: 10),
-                child: _appointmentCard(appointment),
-              )),
+          ..._appointments.map(
+            (appointment) => Padding(
+              padding: const EdgeInsets.only(bottom: 10),
+              child: _appointmentCard(appointment),
+            ),
+          ),
       ],
     );
   }
@@ -1072,15 +1516,55 @@ class _HealthScreenState extends State<HealthScreen> {
               children: [
                 Row(
                   children: [
-                    Expanded(child: Text(doctor, style: const TextStyle(color: textDark, fontSize: 15, fontWeight: FontWeight.w800))),
+                    Expanded(
+                      child: Text(
+                        doctor,
+                        style: const TextStyle(
+                          color: textDark,
+                          fontSize: 15,
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
+                    ),
                     _statusBadge(status),
                   ],
                 ),
-                if (specialty.isNotEmpty) Padding(padding: const EdgeInsets.only(top: 3), child: Text(specialty, style: const TextStyle(color: textSecondary, fontSize: 12))),
+                if (specialty.isNotEmpty)
+                  Padding(
+                    padding: const EdgeInsets.only(top: 3),
+                    child: Text(
+                      specialty,
+                      style: const TextStyle(
+                        color: textSecondary,
+                        fontSize: 12,
+                      ),
+                    ),
+                  ),
                 const SizedBox(height: 6),
-                Text(_formatDateTime(date), style: const TextStyle(color: green, fontSize: 12, fontWeight: FontWeight.w700)),
-                if (clinic.isNotEmpty) Text(clinic, style: const TextStyle(color: muted, fontSize: 11)),
-                if (reason.isNotEmpty) Padding(padding: const EdgeInsets.only(top: 5), child: Text(reason, style: const TextStyle(color: textSecondary, fontSize: 12))),
+                Text(
+                  _formatDateTime(date),
+                  style: const TextStyle(
+                    color: green,
+                    fontSize: 12,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+                if (clinic.isNotEmpty)
+                  Text(
+                    clinic,
+                    style: const TextStyle(color: muted, fontSize: 11),
+                  ),
+                if (reason.isNotEmpty)
+                  Padding(
+                    padding: const EdgeInsets.only(top: 5),
+                    child: Text(
+                      reason,
+                      style: const TextStyle(
+                        color: textSecondary,
+                        fontSize: 12,
+                      ),
+                    ),
+                  ),
               ],
             ),
           ),
@@ -1093,7 +1577,13 @@ class _HealthScreenState extends State<HealthScreen> {
                   await _deleteItem('appointments', id);
                   if (!mounted) return;
                   await _loadSelectedMember();
-                } catch (_) {}
+                } catch (e) {
+                  if (mounted) {
+                    ScaffoldMessenger.of(
+                      context,
+                    ).showSnackBar(SnackBar(content: Text(e.toString())));
+                  }
+                }
               }
             },
             itemBuilder: (_) => const [
@@ -1110,8 +1600,18 @@ class _HealthScreenState extends State<HealthScreen> {
     final completed = status.toUpperCase() == 'COMPLETED';
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-      decoration: BoxDecoration(color: completed ? paleGreen : const Color(0xFFFFF1E8), borderRadius: BorderRadius.circular(8)),
-      child: Text(status, style: TextStyle(color: completed ? forest : terracotta, fontSize: 9, fontWeight: FontWeight.w800)),
+      decoration: BoxDecoration(
+        color: completed ? paleGreen : const Color(0xFFFFF1E8),
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Text(
+        status,
+        style: TextStyle(
+          color: completed ? forest : terracotta,
+          fontSize: 9,
+          fontWeight: FontWeight.w800,
+        ),
+      ),
     );
   }
 
@@ -1121,21 +1621,27 @@ class _HealthScreenState extends State<HealthScreen> {
       children: [
         _sectionTitle('Health Records'),
         const SizedBox(height: 4),
-        const Text('Medical history, reports and notes.', style: TextStyle(color: textSecondary, fontSize: 11)),
+        const Text(
+          'Medical history, reports and notes.',
+          style: TextStyle(color: textSecondary, fontSize: 11),
+        ),
         const SizedBox(height: 12),
         if (_records.isEmpty)
           _emptyState(
             icon: Icons.folder_open_outlined,
             title: 'No health records yet',
-            message: 'Blood reports, prescriptions, diagnoses and other records will appear here.',
+            message:
+                'Blood reports, prescriptions, diagnoses and other records will appear here.',
             buttonText: 'Add record',
             onPressed: () => _showAddRecordModal(),
           )
         else
-          ..._records.map((record) => Padding(
-                padding: const EdgeInsets.only(bottom: 10),
-                child: _recordCard(record),
-              )),
+          ..._records.map(
+            (record) => Padding(
+              padding: const EdgeInsets.only(bottom: 10),
+              child: _recordCard(record),
+            ),
+          ),
       ],
     );
   }
@@ -1155,11 +1661,41 @@ class _HealthScreenState extends State<HealthScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(title, style: const TextStyle(color: textDark, fontSize: 14, fontWeight: FontWeight.w800)),
+                Text(
+                  title,
+                  style: const TextStyle(
+                    color: textDark,
+                    fontSize: 14,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
                 const SizedBox(height: 3),
-                Text(category, style: const TextStyle(color: terracotta, fontSize: 11, fontWeight: FontWeight.w700)),
-                if (date.isNotEmpty) Text(date, style: const TextStyle(color: muted, fontSize: 11)),
-                if (details.isNotEmpty) Padding(padding: const EdgeInsets.only(top: 5), child: Text(details, maxLines: 3, overflow: TextOverflow.ellipsis, style: const TextStyle(color: textSecondary, fontSize: 12))),
+                Text(
+                  category,
+                  style: const TextStyle(
+                    color: terracotta,
+                    fontSize: 11,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+                if (date.isNotEmpty)
+                  Text(
+                    date,
+                    style: const TextStyle(color: muted, fontSize: 11),
+                  ),
+                if (details.isNotEmpty)
+                  Padding(
+                    padding: const EdgeInsets.only(top: 5),
+                    child: Text(
+                      details,
+                      maxLines: 3,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        color: textSecondary,
+                        fontSize: 12,
+                      ),
+                    ),
+                  ),
               ],
             ),
           ),
@@ -1171,7 +1707,13 @@ class _HealthScreenState extends State<HealthScreen> {
                   await _deleteItem('records', id);
                   if (!mounted) return;
                   await _loadSelectedMember();
-                } catch (_) {}
+                } catch (e) {
+                  if (mounted) {
+                    ScaffoldMessenger.of(
+                      context,
+                    ).showSnackBar(SnackBar(content: Text(e.toString())));
+                  }
+                }
               }
             },
             itemBuilder: (_) => const [
@@ -1189,22 +1731,34 @@ class _HealthScreenState extends State<HealthScreen> {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         _sectionTitle('Medical Documents'),
+        if (_documents.isNotEmpty)
+          TextButton.icon(
+            onPressed: _isSaving ? null : _showAddDocumentMessage,
+            icon: const Icon(Icons.add),
+            label: const Text('Add document'),
+          ),
         const SizedBox(height: 4),
-        const Text('Prescriptions, insurance and important health files.', style: TextStyle(color: textSecondary, fontSize: 11)),
+        const Text(
+          'Prescriptions, insurance and important health files.',
+          style: TextStyle(color: textSecondary, fontSize: 11),
+        ),
         const SizedBox(height: 12),
         if (_documents.isEmpty)
           _emptyState(
             icon: Icons.folder_copy_outlined,
             title: 'No documents yet',
-            message: 'Important medical documents can be stored for quick access during emergencies.',
+            message:
+                'Important medical documents can be stored for quick access during emergencies.',
             buttonText: 'Add document',
             onPressed: () => _showAddDocumentMessage(),
           )
         else
-          ..._documents.map((document) => Padding(
-                padding: const EdgeInsets.only(bottom: 10),
-                child: _documentCard(document),
-              )),
+          ..._documents.map(
+            (document) => Padding(
+              padding: const EdgeInsets.only(bottom: 10),
+              child: _documentCard(document),
+            ),
+          ),
       ],
     );
   }
@@ -1223,22 +1777,50 @@ class _HealthScreenState extends State<HealthScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(title, style: const TextStyle(color: textDark, fontWeight: FontWeight.w800)),
+                Text(
+                  title,
+                  style: const TextStyle(
+                    color: textDark,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
                 const SizedBox(height: 3),
-                Text(category, style: const TextStyle(color: textSecondary, fontSize: 11)),
-                if (date.isNotEmpty) Text(date, style: const TextStyle(color: muted, fontSize: 11)),
+                Text(
+                  category,
+                  style: const TextStyle(color: textSecondary, fontSize: 11),
+                ),
+                if (date.isNotEmpty)
+                  Text(
+                    date,
+                    style: const TextStyle(color: muted, fontSize: 11),
+                  ),
               ],
             ),
           ),
           if (id != null)
             IconButton(
-              icon: const Icon(Icons.delete_outline_rounded, color: Colors.redAccent),
+              tooltip: 'Download',
+              icon: const Icon(Icons.download_outlined, color: forest),
+              onPressed: () => _downloadDocument(map),
+            ),
+          if (id != null)
+            IconButton(
+              icon: const Icon(
+                Icons.delete_outline_rounded,
+                color: Colors.redAccent,
+              ),
               onPressed: () async {
                 try {
                   await _deleteItem('documents', id);
                   if (!mounted) return;
                   await _loadSelectedMember();
-                } catch (_) {}
+                } catch (e) {
+                  if (mounted) {
+                    ScaffoldMessenger.of(
+                      context,
+                    ).showSnackBar(SnackBar(content: Text(e.toString())));
+                  }
+                }
               },
             ),
         ],
@@ -1247,13 +1829,18 @@ class _HealthScreenState extends State<HealthScreen> {
   }
 
   Widget _buildWomensHealth() {
-    final latestCycle = _cycles.isNotEmpty ? Map<String, dynamic>.from(_cycles.first) : null;
+    final latestCycle = _cycles.isNotEmpty
+        ? Map<String, dynamic>.from(_cycles.first)
+        : null;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         _sectionTitle("Women's Health"),
         const SizedBox(height: 4),
-        const Text('Cycle tracking and personal health information.', style: TextStyle(color: textSecondary, fontSize: 11)),
+        const Text(
+          'Cycle tracking and personal health information.',
+          style: TextStyle(color: textSecondary, fontSize: 11),
+        ),
         const SizedBox(height: 12),
         _buildCycleSummary(latestCycle),
         const SizedBox(height: 16),
@@ -1266,7 +1853,14 @@ class _HealthScreenState extends State<HealthScreen> {
                 onPressed: _startPeriod,
                 icon: const Icon(Icons.water_drop_outlined),
                 label: const Text('Start period'),
-                style: ElevatedButton.styleFrom(backgroundColor: terracotta, foregroundColor: white, minimumSize: const Size(0, 48), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(13))),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: terracotta,
+                  foregroundColor: white,
+                  minimumSize: const Size(0, 48),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(13),
+                  ),
+                ),
               ),
             ),
             const SizedBox(width: 10),
@@ -1275,7 +1869,14 @@ class _HealthScreenState extends State<HealthScreen> {
                 onPressed: _endCurrentCycle,
                 icon: const Icon(Icons.check_circle_outline),
                 label: const Text('End period'),
-                style: OutlinedButton.styleFrom(foregroundColor: terracotta, minimumSize: const Size(0, 48), side: const BorderSide(color: Color(0xFFE3B2A4)), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(13))),
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: terracotta,
+                  minimumSize: const Size(0, 48),
+                  side: const BorderSide(color: Color(0xFFE3B2A4)),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(13),
+                  ),
+                ),
               ),
             ),
           ],
@@ -1294,7 +1895,10 @@ class _HealthScreenState extends State<HealthScreen> {
     if (cycle == null) {
       return Container(
         padding: const EdgeInsets.all(18),
-        decoration: BoxDecoration(color: peach, borderRadius: BorderRadius.circular(18)),
+        decoration: BoxDecoration(
+          color: peach,
+          borderRadius: BorderRadius.circular(18),
+        ),
         child: const Row(
           children: [
             Icon(Icons.calendar_month_outlined, color: terracotta),
@@ -1303,9 +1907,18 @@ class _HealthScreenState extends State<HealthScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text('Start tracking your cycle', style: TextStyle(color: textDark, fontWeight: FontWeight.w800)),
+                  Text(
+                    'Start tracking your cycle',
+                    style: TextStyle(
+                      color: textDark,
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
                   SizedBox(height: 4),
-                  Text('Add the first period date to begin building personal history.', style: TextStyle(color: textSecondary, fontSize: 12)),
+                  Text(
+                    'Add the first period date to begin building personal history.',
+                    style: TextStyle(color: textSecondary, fontSize: 12),
+                  ),
                 ],
               ),
             ),
@@ -1320,7 +1933,11 @@ class _HealthScreenState extends State<HealthScreen> {
 
     return Container(
       padding: const EdgeInsets.all(18),
-      decoration: BoxDecoration(color: peach, borderRadius: BorderRadius.circular(18), border: Border.all(color: const Color(0xFFE8C1B5))),
+      decoration: BoxDecoration(
+        color: peach,
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: const Color(0xFFE8C1B5)),
+      ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -1328,28 +1945,74 @@ class _HealthScreenState extends State<HealthScreen> {
             children: [
               const Icon(Icons.favorite_border_rounded, color: terracotta),
               const SizedBox(width: 8),
-              const Expanded(child: Text('Current cycle', style: TextStyle(color: textDark, fontSize: 15, fontWeight: FontWeight.w800))),
+              const Expanded(
+                child: Text(
+                  'Current cycle',
+                  style: TextStyle(
+                    color: textDark,
+                    fontSize: 15,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+              ),
               if (end == null)
                 Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                  decoration: BoxDecoration(color: white.withValues(alpha: 0.75), borderRadius: BorderRadius.circular(8)),
-                  child: const Text('ONGOING', style: TextStyle(color: terracotta, fontSize: 9, fontWeight: FontWeight.w800)),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 8,
+                    vertical: 4,
+                  ),
+                  decoration: BoxDecoration(
+                    color: white.withValues(alpha: 0.75),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: const Text(
+                    'ONGOING',
+                    style: TextStyle(
+                      color: terracotta,
+                      fontSize: 9,
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
                 ),
             ],
           ),
           const SizedBox(height: 14),
-          Text('Started: $start', style: const TextStyle(color: textDark, fontSize: 13, fontWeight: FontWeight.w700)),
+          Text(
+            'Started: $start',
+            style: const TextStyle(
+              color: textDark,
+              fontSize: 13,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
           const SizedBox(height: 4),
-          Text(end == null ? 'End date has not been recorded.' : 'Ended: $end', style: const TextStyle(color: textSecondary, fontSize: 12)),
-          if (length != null) Padding(padding: const EdgeInsets.only(top: 4), child: Text('Period length: $length days', style: const TextStyle(color: textSecondary, fontSize: 12))),
+          Text(
+            end == null ? 'End date has not been recorded.' : 'Ended: $end',
+            style: const TextStyle(color: textSecondary, fontSize: 12),
+          ),
+          if (length != null)
+            Padding(
+              padding: const EdgeInsets.only(top: 4),
+              child: Text(
+                'Period length: $length days',
+                style: const TextStyle(color: textSecondary, fontSize: 12),
+              ),
+            ),
         ],
       ),
     );
   }
 
   Widget _buildCustomCycleCalendar() {
-    final daysInMonth = DateUtils.getDaysInMonth(_displayedMonth.year, _displayedMonth.month);
-    final firstDayOfMonth = DateTime(_displayedMonth.year, _displayedMonth.month, 1);
+    final daysInMonth = DateUtils.getDaysInMonth(
+      _displayedMonth.year,
+      _displayedMonth.month,
+    );
+    final firstDayOfMonth = DateTime(
+      _displayedMonth.year,
+      _displayedMonth.month,
+      1,
+    );
     final firstWeekday = firstDayOfMonth.weekday % 7;
 
     final periodDays = <String>{};
@@ -1359,8 +2022,10 @@ class _HealthScreenState extends State<HealthScreen> {
       final map = Map<String, dynamic>.from(c);
       if (map['startDate'] != null) {
         final start = DateTime.parse(map['startDate']);
-        final end = map['endDate'] != null ? DateTime.parse(map['endDate']) : start.add(const Duration(days: 5));
-        
+        final end = map['endDate'] != null
+            ? DateTime.parse(map['endDate'])
+            : start.add(const Duration(days: 5));
+
         DateTime curr = start;
         while (!curr.isAfter(end)) {
           periodDays.add(_formatDate(curr));
@@ -1376,7 +2041,11 @@ class _HealthScreenState extends State<HealthScreen> {
 
     return Container(
       padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(color: white, borderRadius: BorderRadius.circular(18), border: Border.all(color: border)),
+      decoration: BoxDecoration(
+        color: white,
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: border),
+      ),
       child: Column(
         children: [
           Row(
@@ -1386,20 +2055,32 @@ class _HealthScreenState extends State<HealthScreen> {
                 icon: const Icon(Icons.chevron_left_rounded),
                 onPressed: () {
                   setState(() {
-                    _displayedMonth = DateTime(_displayedMonth.year, _displayedMonth.month - 1, 1);
+                    _displayedMonth = DateTime(
+                      _displayedMonth.year,
+                      _displayedMonth.month - 1,
+                      1,
+                    );
                   });
                   _loadSelectedMember();
                 },
               ),
               Text(
                 '${_getMonthName(_displayedMonth.month)} ${_displayedMonth.year}',
-                style: const TextStyle(color: textDark, fontWeight: FontWeight.w800, fontSize: 15),
+                style: const TextStyle(
+                  color: textDark,
+                  fontWeight: FontWeight.w800,
+                  fontSize: 15,
+                ),
               ),
               IconButton(
                 icon: const Icon(Icons.chevron_right_rounded),
                 onPressed: () {
                   setState(() {
-                    _displayedMonth = DateTime(_displayedMonth.year, _displayedMonth.month + 1, 1);
+                    _displayedMonth = DateTime(
+                      _displayedMonth.year,
+                      _displayedMonth.month + 1,
+                      1,
+                    );
                   });
                   _loadSelectedMember();
                 },
@@ -1410,7 +2091,16 @@ class _HealthScreenState extends State<HealthScreen> {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceAround,
             children: ['S', 'M', 'T', 'W', 'T', 'F', 'S']
-                .map((d) => Text(d, style: const TextStyle(color: muted, fontWeight: FontWeight.w700, fontSize: 12)))
+                .map(
+                  (d) => Text(
+                    d,
+                    style: const TextStyle(
+                      color: muted,
+                      fontWeight: FontWeight.w700,
+                      fontSize: 12,
+                    ),
+                  ),
+                )
                 .toList(),
           ),
           const SizedBox(height: 8),
@@ -1426,7 +2116,11 @@ class _HealthScreenState extends State<HealthScreen> {
             itemBuilder: (context, index) {
               if (index < firstWeekday) return const SizedBox.shrink();
               final dayNum = index - firstWeekday + 1;
-              final currentCellDate = DateTime(_displayedMonth.year, _displayedMonth.month, dayNum);
+              final currentCellDate = DateTime(
+                _displayedMonth.year,
+                _displayedMonth.month,
+                dayNum,
+              );
               final dateStr = _formatDate(currentCellDate);
 
               bool isPeriod = periodDays.contains(dateStr);
@@ -1455,7 +2149,9 @@ class _HealthScreenState extends State<HealthScreen> {
                     '$dayNum',
                     style: TextStyle(
                       color: textColor,
-                      fontWeight: isPeriod || isFertile ? FontWeight.w800 : FontWeight.w600,
+                      fontWeight: isPeriod || isFertile
+                          ? FontWeight.w800
+                          : FontWeight.w600,
                       fontSize: 13,
                     ),
                   ),
@@ -1480,91 +2176,184 @@ class _HealthScreenState extends State<HealthScreen> {
   Widget _legendDot(Color color, String label) {
     return Row(
       children: [
-        Container(width: 10, height: 10, decoration: BoxDecoration(color: color, shape: BoxShape.circle)),
+        Container(
+          width: 10,
+          height: 10,
+          decoration: BoxDecoration(color: color, shape: BoxShape.circle),
+        ),
         const SizedBox(width: 6),
-        Text(label, style: const TextStyle(color: textSecondary, fontSize: 11, fontWeight: FontWeight.w600)),
+        Text(
+          label,
+          style: const TextStyle(
+            color: textSecondary,
+            fontSize: 11,
+            fontWeight: FontWeight.w600,
+          ),
+        ),
       ],
     );
   }
 
   String _getMonthName(int month) {
-    const months = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+    const months = [
+      'January',
+      'February',
+      'March',
+      'April',
+      'May',
+      'June',
+      'July',
+      'August',
+      'September',
+      'October',
+      'November',
+      'December',
+    ];
     return months[month - 1];
   }
 
+  dynamic _cycleForDate(DateTime date) {
+    final day = _formatDate(date);
+    for (final cycle in _cycles) {
+      if (cycle['startDate'].toString().compareTo(day) <= 0) return cycle['id'];
+    }
+    throw StateError(
+      'Start a period on or before this date before recording symptoms',
+    );
+  }
+
   Future<void> _showCycleDateOptions(DateTime date) async {
-    String selectedFlow = 'Medium';
-    final symptomsSelected = <String>[];
-    final noteController = TextEditingController();
+    final existingEntry = _symptomEntries
+        .where((entry) => entry['date'] == _formatDate(date))
+        .firstOrNull;
+    final oldFlow =
+        existingEntry?['flow']?.toString().toLowerCase() ?? 'medium';
+    String selectedFlow = oldFlow[0].toUpperCase() + oldFlow.substring(1);
+    final symptomsSelected =
+        existingEntry?['symptoms']
+            ?.toString()
+            .split(', ')
+            .where((s) => s.isNotEmpty)
+            .toList() ??
+        <String>[];
+    final noteController = TextEditingController(
+      text: existingEntry?['notes']?.toString() ?? '',
+    );
 
     final result = await showModalBottomSheet<String>(
       context: context,
       isScrollControlled: true,
       backgroundColor: white,
-      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(24))),
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
       builder: (context) {
         return StatefulBuilder(
           builder: (context, setModalState) {
             return SafeArea(
               child: Padding(
-                padding: EdgeInsets.fromLTRB(24, 24, 24, MediaQuery.of(context).viewInsets.bottom + 24),
+                padding: EdgeInsets.fromLTRB(
+                  24,
+                  24,
+                  24,
+                  MediaQuery.of(context).viewInsets.bottom + 24,
+                ),
                 child: SingleChildScrollView(
                   child: Column(
                     mainAxisSize: MainAxisSize.min,
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text('Log Entry • ${_formatDate(date)}', style: const TextStyle(color: textDark, fontSize: 18, fontWeight: FontWeight.w800)),
+                      Text(
+                        'Log Entry • ${_formatDate(date)}',
+                        style: const TextStyle(
+                          color: textDark,
+                          fontSize: 18,
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
                       const SizedBox(height: 16),
                       ListTile(
-                        leading: const Icon(Icons.water_drop_outlined, color: periodRed),
+                        leading: const Icon(
+                          Icons.water_drop_outlined,
+                          color: periodRed,
+                        ),
                         title: const Text('Mark period start'),
                         onTap: () => Navigator.pop(context, 'start'),
                       ),
                       const Divider(height: 1),
                       const SizedBox(height: 12),
-                      const Text('Flow Level', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 13, color: textSecondary)),
+                      const Text(
+                        'Flow Level',
+                        style: TextStyle(
+                          fontWeight: FontWeight.w700,
+                          fontSize: 13,
+                          color: textSecondary,
+                        ),
+                      ),
                       const SizedBox(height: 8),
                       Row(
                         children: ['Light', 'Medium', 'Heavy'].map((flow) {
                           return Expanded(
                             child: Padding(
-                              padding: const EdgeInsets.symmetric(horizontal: 4),
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 4,
+                              ),
                               child: ChoiceChip(
                                 label: Text(flow),
                                 selected: selectedFlow == flow,
                                 selectedColor: peach,
-                                onSelected: (sel) => setModalState(() => selectedFlow = flow),
+                                onSelected: (sel) =>
+                                    setModalState(() => selectedFlow = flow),
                               ),
                             ),
                           );
                         }).toList(),
                       ),
                       const SizedBox(height: 16),
-                      const Text('Symptoms', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 13, color: textSecondary)),
+                      const Text(
+                        'Symptoms',
+                        style: TextStyle(
+                          fontWeight: FontWeight.w700,
+                          fontSize: 13,
+                          color: textSecondary,
+                        ),
+                      ),
                       Wrap(
                         spacing: 8,
-                        children: ['Cramps', 'Headache', 'Back pain', 'Fatigue', 'Bloating'].map((symptom) {
-                          final isSelected = symptomsSelected.contains(symptom);
-                          return FilterChip(
-                            label: Text(symptom),
-                            selected: isSelected,
-                            selectedColor: paleGreen,
-                            onSelected: (sel) {
-                              setModalState(() {
-                                if (sel) {
-                                  symptomsSelected.add(symptom);
-                                } else {
-                                  symptomsSelected.remove(symptom);
-                                }
-                              });
-                            },
-                          );
-                        }).toList(),
+                        children:
+                            [
+                              'Cramps',
+                              'Headache',
+                              'Back pain',
+                              'Fatigue',
+                              'Bloating',
+                            ].map((symptom) {
+                              final isSelected = symptomsSelected.contains(
+                                symptom,
+                              );
+                              return FilterChip(
+                                label: Text(symptom),
+                                selected: isSelected,
+                                selectedColor: paleGreen,
+                                onSelected: (sel) {
+                                  setModalState(() {
+                                    if (sel) {
+                                      symptomsSelected.add(symptom);
+                                    } else {
+                                      symptomsSelected.remove(symptom);
+                                    }
+                                  });
+                                },
+                              );
+                            }).toList(),
                       ),
                       const SizedBox(height: 16),
                       TextField(
                         controller: noteController,
-                        decoration: _inputDecoration('Private Notes', hint: 'Add optional notes...'),
+                        decoration: _inputDecoration(
+                          'Private Notes',
+                          hint: 'Add optional notes...',
+                        ),
                         maxLines: 2,
                       ),
                       const SizedBox(height: 20),
@@ -1572,9 +2361,19 @@ class _HealthScreenState extends State<HealthScreen> {
                         width: double.infinity,
                         height: 48,
                         child: ElevatedButton(
-                          onPressed: () => Navigator.pop(context, 'log_symptom'),
-                          style: ElevatedButton.styleFrom(backgroundColor: forest, foregroundColor: white, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))),
-                          child: const Text('Save Symptom Log', style: TextStyle(fontWeight: FontWeight.w800)),
+                          onPressed: () =>
+                              Navigator.pop(context, 'log_symptom'),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: forest,
+                            foregroundColor: white,
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                          ),
+                          child: const Text(
+                            'Save Symptom Log',
+                            style: TextStyle(fontWeight: FontWeight.w800),
+                          ),
                         ),
                       ),
                     ],
@@ -1591,11 +2390,12 @@ class _HealthScreenState extends State<HealthScreen> {
       await _saveCycleStart(date);
     } else if (result == 'log_symptom') {
       try {
-        await http.post(
+        await _http.post(
           Uri.parse('$baseUrl/health/womens-health/entries'),
           headers: {'Content-Type': 'application/json'},
           body: jsonEncode({
-            'cycleId': _cycles.isNotEmpty ? _cycles.first['id'] : 1,
+            'cycleId': _cycleForDate(date),
+            'mood': existingEntry?['mood'],
             'familyId': widget.familyId,
             'familyMemberId': _selectedMemberId,
             'date': _formatDate(date),
@@ -1607,10 +2407,15 @@ class _HealthScreenState extends State<HealthScreen> {
         if (!mounted) return;
         await _loadSelectedMember();
         // ignore: use_build_context_synchronously
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Symptoms logged successfully!')));
-      } catch (_) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Symptoms logged successfully!')),
+        );
+      } catch (e) {
         if (!mounted) return;
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Could not save symptom log.')));
+        // ignore: use_build_context_synchronously
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(e.toString())));
       }
     }
   }
@@ -1632,10 +2437,16 @@ class _HealthScreenState extends State<HealthScreen> {
       if (!mounted) return;
       await _loadSelectedMember();
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Period start date saved.')));
-    } catch (_) {
+      // ignore: use_build_context_synchronously
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Period start date saved.')));
+    } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Could not save the cycle date.')));
+      // ignore: use_build_context_synchronously
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(e.toString())));
     } finally {
       if (mounted) setState(() => _isSaving = false);
     }
@@ -1643,7 +2454,9 @@ class _HealthScreenState extends State<HealthScreen> {
 
   Future<void> _endCurrentCycle() async {
     if (_cycles.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('There is no cycle to end yet.')));
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('There is no cycle to end yet.')),
+      );
       return;
     }
     final latest = Map<String, dynamic>.from(_cycles.first);
@@ -1663,10 +2476,16 @@ class _HealthScreenState extends State<HealthScreen> {
       if (!mounted) return;
       await _loadSelectedMember();
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Period end date saved.')));
-    } catch (_) {
+      // ignore: use_build_context_synchronously
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Period end date saved.')));
+    } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Could not save the end date.')));
+      // ignore: use_build_context_synchronously
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(e.toString())));
     }
   }
 
@@ -1694,7 +2513,11 @@ class _HealthScreenState extends State<HealthScreen> {
           child: Container(
             margin: const EdgeInsets.only(bottom: 10),
             padding: const EdgeInsets.all(15),
-            decoration: BoxDecoration(color: white, borderRadius: BorderRadius.circular(15), border: Border.all(color: border)),
+            decoration: BoxDecoration(
+              color: white,
+              borderRadius: BorderRadius.circular(15),
+              border: Border.all(color: border),
+            ),
             child: Row(
               children: [
                 const Icon(Icons.calendar_month_outlined, color: terracotta),
@@ -1703,12 +2526,33 @@ class _HealthScreenState extends State<HealthScreen> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text('$start → ${end ?? "Ongoing"}', style: const TextStyle(color: textDark, fontSize: 13, fontWeight: FontWeight.w800)),
-                      if (length != null) Padding(padding: const EdgeInsets.only(top: 3), child: Text('$length days', style: const TextStyle(color: textSecondary, fontSize: 11))),
+                      Text(
+                        '$start → ${end ?? "Ongoing"}',
+                        style: const TextStyle(
+                          color: textDark,
+                          fontSize: 13,
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
+                      if (length != null)
+                        Padding(
+                          padding: const EdgeInsets.only(top: 3),
+                          child: Text(
+                            '$length days',
+                            style: const TextStyle(
+                              color: textSecondary,
+                              fontSize: 11,
+                            ),
+                          ),
+                        ),
                     ],
                   ),
                 ),
-                const Icon(Icons.arrow_forward_ios_rounded, size: 14, color: muted),
+                const Icon(
+                  Icons.arrow_forward_ios_rounded,
+                  size: 14,
+                  color: muted,
+                ),
               ],
             ),
           ),
@@ -1725,14 +2569,17 @@ class _HealthScreenState extends State<HealthScreen> {
 
     final matchingSymptoms = _symptomEntries.where((entry) {
       final eDate = entry['date']?.toString() ?? '';
-      return eDate.compareTo(start) >= 0 && (cycle['endDate'] == null || eDate.compareTo(end) <= 0);
+      return eDate.compareTo(start) >= 0 &&
+          (cycle['endDate'] == null || eDate.compareTo(end) <= 0);
     }).toList();
 
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
       backgroundColor: white,
-      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(24))),
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
       builder: (context) {
         return SafeArea(
           child: Padding(
@@ -1742,24 +2589,49 @@ class _HealthScreenState extends State<HealthScreen> {
                 mainAxisSize: MainAxisSize.min,
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Text('Cycle Details & Symptoms', style: TextStyle(color: textDark, fontSize: 18, fontWeight: FontWeight.w800)),
+                  const Text(
+                    'Cycle Details & Symptoms',
+                    style: TextStyle(
+                      color: textDark,
+                      fontSize: 18,
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
                   const SizedBox(height: 16),
                   _profileRow('Start Date', start),
                   _profileRow('End Date', end),
                   _profileRow('Period Length', '$length days'),
                   _profileRow('Cycle Notes', notes),
                   const SizedBox(height: 12),
-                  const Text('Logged Symptoms & Flow', style: TextStyle(color: textDark, fontWeight: FontWeight.w800, fontSize: 14)),
+                  const Text(
+                    'Logged Symptoms & Flow',
+                    style: TextStyle(
+                      color: textDark,
+                      fontWeight: FontWeight.w800,
+                      fontSize: 14,
+                    ),
+                  ),
                   const SizedBox(height: 8),
                   matchingSymptoms.isEmpty
-                      ? const Text('No symptoms recorded for this cycle.', style: TextStyle(color: muted, fontSize: 12))
+                      ? const Text(
+                          'No symptoms recorded for this cycle.',
+                          style: TextStyle(color: muted, fontSize: 12),
+                        )
                       : Column(
                           children: matchingSymptoms.map((s) {
                             return ListTile(
                               contentPadding: EdgeInsets.zero,
                               dense: true,
-                              title: Text('${s['date']} • Flow: ${s['flow'] ?? "N/A"}', style: const TextStyle(fontWeight: FontWeight.w700)),
-                              subtitle: Text('Symptoms: ${s['symptoms'] ?? "None"}', style: const TextStyle(color: textSecondary)),
+                              title: Text(
+                                '${s['date']} • Flow: ${s['flow'] ?? "N/A"}',
+                                style: const TextStyle(
+                                  fontWeight: FontWeight.w700,
+                                ),
+                              ),
+                              subtitle: Text(
+                                'Symptoms: ${s['symptoms'] ?? "None"}',
+                                style: const TextStyle(color: textSecondary),
+                              ),
                             );
                           }).toList(),
                         ),
@@ -1775,7 +2647,10 @@ class _HealthScreenState extends State<HealthScreen> {
   Widget _buildPrivateHealthNotice() {
     return Container(
       padding: const EdgeInsets.all(15),
-      decoration: BoxDecoration(color: paleGreen, borderRadius: BorderRadius.circular(16)),
+      decoration: BoxDecoration(
+        color: paleGreen,
+        borderRadius: BorderRadius.circular(16),
+      ),
       child: const Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -1785,9 +2660,23 @@ class _HealthScreenState extends State<HealthScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text('Private health information', style: TextStyle(color: forest, fontWeight: FontWeight.w800, fontSize: 13)),
+                Text(
+                  'Private health information',
+                  style: TextStyle(
+                    color: forest,
+                    fontWeight: FontWeight.w800,
+                    fontSize: 13,
+                  ),
+                ),
                 SizedBox(height: 4),
-                Text('Women’s health information should follow member privacy permissions and should not automatically be visible to everyone.', style: TextStyle(color: textSecondary, fontSize: 11, height: 1.4)),
+                Text(
+                  'Women’s health information should follow member privacy permissions and should not automatically be visible to everyone.',
+                  style: TextStyle(
+                    color: textSecondary,
+                    fontSize: 11,
+                    height: 1.4,
+                  ),
+                ),
               ],
             ),
           ),
@@ -1797,20 +2686,60 @@ class _HealthScreenState extends State<HealthScreen> {
   }
 
   void _showEditProfileModal(Map<String, dynamic> member) {
+    if (_isLoading || _errorMessage != null || _profile == null) return;
     final profile = Map<String, dynamic>.from(_profile ?? {});
-    final dobController = TextEditingController(text: profile['dateOfBirth']?.toString() ?? '');
-    final heightController = TextEditingController(text: profile['heightCm']?.toString() ?? '');
-    final weightController = TextEditingController(text: profile['weightKg']?.toString() ?? '');
-    final allergiesController = TextEditingController(text: profile['allergies']?.toString() ?? '');
-    final conditionsController = TextEditingController(text: profile['knownConditions']?.toString() ?? '');
-    final surgeryController = TextEditingController(text: profile['previousSurgeries']?.toString() ?? '');
-    final hospitalizationController = TextEditingController(text: profile['previousHospitalizations']?.toString() ?? '');
-    final notesController = TextEditingController(text: profile['specialMedicalNotes']?.toString() ?? '');
-    final doctorController = TextEditingController(text: profile['primaryPhysicianName']?.toString() ?? '');
-    final doctorPhoneController = TextEditingController(text: profile['primaryPhysicianPhone']?.toString() ?? '');
-    final clinicController = TextEditingController(text: profile['hospitalOrClinic']?.toString() ?? '');
-    final insuranceController = TextEditingController(text: profile['insuranceProvider']?.toString() ?? '');
-    final policyController = TextEditingController(text: profile['insurancePolicyNumber']?.toString() ?? '');
+    final profileId = _selectedMemberId;
+    final dobController = TextEditingController(
+      text: profile['dateOfBirth']?.toString() ?? '',
+    );
+    final heightController = TextEditingController(
+      text: profile['heightCm']?.toString() ?? '',
+    );
+    final weightController = TextEditingController(
+      text: profile['weightKg']?.toString() ?? '',
+    );
+    final allergiesController = TextEditingController(
+      text: profile['allergies']?.toString() ?? '',
+    );
+    final conditionsController = TextEditingController(
+      text: profile['knownConditions']?.toString() ?? '',
+    );
+    final surgeryController = TextEditingController(
+      text: profile['previousSurgeries']?.toString() ?? '',
+    );
+    final hospitalizationController = TextEditingController(
+      text: profile['previousHospitalizations']?.toString() ?? '',
+    );
+    final notesController = TextEditingController(
+      text: profile['specialMedicalNotes']?.toString() ?? '',
+    );
+    final doctorController = TextEditingController(
+      text: profile['primaryPhysicianName']?.toString() ?? '',
+    );
+    final doctorPhoneController = TextEditingController(
+      text: profile['primaryPhysicianPhone']?.toString() ?? '',
+    );
+    final clinicController = TextEditingController(
+      text: profile['hospitalOrClinic']?.toString() ?? '',
+    );
+    final insuranceController = TextEditingController(
+      text: profile['insuranceProvider']?.toString() ?? '',
+    );
+    final emergencyName = TextEditingController(
+      text: profile['emergencyContactName']?.toString() ?? '',
+    );
+    final emergencyRelation = TextEditingController(
+      text: profile['emergencyContactRelationship']?.toString() ?? '',
+    );
+    final emergencyPhone = TextEditingController(
+      text: profile['emergencyContactPhone']?.toString() ?? '',
+    );
+    final insuranceExpiry = TextEditingController(
+      text: profile['insuranceExpiryDate']?.toString() ?? '',
+    );
+    final policyController = TextEditingController(
+      text: profile['insurancePolicyNumber']?.toString() ?? '',
+    );
     String selectedBloodType = profile['bloodType']?.toString() ?? 'Unknown';
     bool womensHealthEnabled = profile['womensHealthEnabled'] == true;
     bool emergencyAccessEnabled = profile['emergencyAccessEnabled'] != false;
@@ -1819,23 +2748,48 @@ class _HealthScreenState extends State<HealthScreen> {
       context: context,
       isScrollControlled: true,
       backgroundColor: white,
-      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(26))),
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(26)),
+      ),
       builder: (context) {
         return StatefulBuilder(
           builder: (context, setModalState) {
             return Padding(
-              padding: EdgeInsets.only(left: 22, right: 22, top: 22, bottom: MediaQuery.of(context).viewInsets.bottom + 22),
+              padding: EdgeInsets.only(
+                left: 22,
+                right: 22,
+                top: 22,
+                bottom: MediaQuery.of(context).viewInsets.bottom + 22,
+              ),
               child: SingleChildScrollView(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Row(
                       children: [
-                        const Expanded(child: Text('Health Profile', style: TextStyle(color: textDark, fontSize: 20, fontWeight: FontWeight.w800))),
-                        IconButton(onPressed: () => Navigator.pop(context), icon: const Icon(Icons.close_rounded)),
+                        const Expanded(
+                          child: Text(
+                            'Health Profile',
+                            style: TextStyle(
+                              color: textDark,
+                              fontSize: 20,
+                              fontWeight: FontWeight.w800,
+                            ),
+                          ),
+                        ),
+                        IconButton(
+                          onPressed: () => Navigator.pop(context),
+                          icon: const Icon(Icons.close_rounded),
+                        ),
                       ],
                     ),
-                    Text(_getFriendlyName(member), style: const TextStyle(color: textSecondary, fontSize: 13)),
+                    Text(
+                      _getFriendlyName(member),
+                      style: const TextStyle(
+                        color: textSecondary,
+                        fontSize: 13,
+                      ),
+                    ),
                     const SizedBox(height: 22),
                     _modalSection('Personal Information'),
                     _inputField(dobController, 'Date of Birth', 'YYYY-MM-DD'),
@@ -1843,62 +2797,180 @@ class _HealthScreenState extends State<HealthScreen> {
                     DropdownButtonFormField<String>(
                       initialValue: selectedBloodType,
                       decoration: _inputDecoration('Blood Type'),
-                      items: ['Unknown', 'A+', 'A-', 'B+', 'B-', 'AB+', 'AB-', 'O+', 'O-']
-                          .map((value) => DropdownMenuItem(value: value, child: Text(value)))
-                          .toList(),
+                      items:
+                          [
+                                'Unknown',
+                                'A+',
+                                'A-',
+                                'B+',
+                                'B-',
+                                'AB+',
+                                'AB-',
+                                'O+',
+                                'O-',
+                              ]
+                              .map(
+                                (value) => DropdownMenuItem(
+                                  value: value,
+                                  child: Text(value),
+                                ),
+                              )
+                              .toList(),
                       onChanged: (value) {
-                        if (value != null) setModalState(() => selectedBloodType = value);
+                        if (value != null) {
+                          setModalState(() => selectedBloodType = value);
+                        }
                       },
                     ),
                     const SizedBox(height: 10),
                     Row(
                       children: [
-                        Expanded(child: _inputField(heightController, 'Height (cm)', 'e.g. 168', keyboardType: TextInputType.number)),
+                        Expanded(
+                          child: _inputField(
+                            heightController,
+                            'Height (cm)',
+                            'e.g. 168',
+                            keyboardType: TextInputType.number,
+                          ),
+                        ),
                         const SizedBox(width: 10),
-                        Expanded(child: _inputField(weightController, 'Weight (kg)', 'e.g. 62', keyboardType: const TextInputType.numberWithOptions(decimal: true))),
+                        Expanded(
+                          child: _inputField(
+                            weightController,
+                            'Weight (kg)',
+                            'e.g. 62',
+                            keyboardType: const TextInputType.numberWithOptions(
+                              decimal: true,
+                            ),
+                          ),
+                        ),
                       ],
                     ),
                     const SizedBox(height: 20),
                     _modalSection('Medical Information'),
-                    _inputField(allergiesController, 'Allergies', 'e.g. Penicillin, peanuts', maxLines: 2),
+                    _inputField(
+                      allergiesController,
+                      'Allergies',
+                      'e.g. Penicillin, peanuts',
+                      maxLines: 2,
+                    ),
                     const SizedBox(height: 10),
-                    _inputField(conditionsController, 'Known health conditions', 'e.g. Asthma, diabetes', maxLines: 2),
+                    _inputField(
+                      conditionsController,
+                      'Known health conditions',
+                      'e.g. Asthma, diabetes',
+                      maxLines: 2,
+                    ),
                     const SizedBox(height: 10),
-                    _inputField(surgeryController, 'Previous surgeries', 'Optional', maxLines: 2),
+                    _inputField(
+                      surgeryController,
+                      'Previous surgeries',
+                      'Optional',
+                      maxLines: 2,
+                    ),
                     const SizedBox(height: 10),
-                    _inputField(hospitalizationController, 'Previous hospitalizations', 'Optional', maxLines: 2),
+                    _inputField(
+                      hospitalizationController,
+                      'Previous hospitalizations',
+                      'Optional',
+                      maxLines: 2,
+                    ),
                     const SizedBox(height: 10),
-                    _inputField(notesController, 'Special medical notes', 'Important information for emergencies', maxLines: 3),
+                    _inputField(
+                      notesController,
+                      'Special medical notes',
+                      'Important information for emergencies',
+                      maxLines: 3,
+                    ),
                     const SizedBox(height: 20),
                     _modalSection('Primary Physician'),
-                    _inputField(doctorController, 'Primary physician', 'Doctor name'),
+                    _inputField(
+                      doctorController,
+                      'Primary physician',
+                      'Doctor name',
+                    ),
                     const SizedBox(height: 10),
-                    _inputField(doctorPhoneController, 'Physician phone', 'Phone number', keyboardType: TextInputType.phone),
+                    _inputField(
+                      doctorPhoneController,
+                      'Physician phone',
+                      'Phone number',
+                      keyboardType: TextInputType.phone,
+                    ),
                     const SizedBox(height: 10),
-                    _inputField(clinicController, 'Hospital / Clinic', 'Hospital or clinic name'),
+                    _inputField(
+                      clinicController,
+                      'Hospital / Clinic',
+                      'Hospital or clinic name',
+                    ),
                     const SizedBox(height: 20),
                     _modalSection('Insurance'),
-                    _inputField(insuranceController, 'Insurance provider', 'Provider name'),
+                    _inputField(
+                      insuranceController,
+                      'Insurance provider',
+                      'Provider name',
+                    ),
                     const SizedBox(height: 10),
-                    _inputField(policyController, 'Policy number', 'Policy number'),
+                    _inputField(
+                      policyController,
+                      'Policy number',
+                      'Policy number',
+                    ),
+                    const SizedBox(height: 20),
+                    _inputField(
+                      insuranceExpiry,
+                      'Insurance expiry',
+                      'YYYY-MM-DD (optional)',
+                    ),
+                    const SizedBox(height: 20),
+                    _modalSection('Emergency Contact'),
+                    _inputField(emergencyName, 'Contact name', 'Name'),
+                    const SizedBox(height: 10),
+                    _inputField(
+                      emergencyRelation,
+                      'Relationship',
+                      'Relationship',
+                    ),
+                    const SizedBox(height: 10),
+                    _inputField(
+                      emergencyPhone,
+                      'Contact phone',
+                      'Phone number',
+                      keyboardType: TextInputType.phone,
+                    ),
                     const SizedBox(height: 20),
                     _modalSection('Privacy & Health Access'),
                     SwitchListTile(
                       contentPadding: EdgeInsets.zero,
-                      title: const Text('Emergency access', style: TextStyle(fontWeight: FontWeight.w700)),
-                      subtitle: const Text('Allow permitted family members to access emergency health information.', style: TextStyle(fontSize: 11)),
+                      title: const Text(
+                        'Emergency access',
+                        style: TextStyle(fontWeight: FontWeight.w700),
+                      ),
+                      subtitle: const Text(
+                        'Allow permitted family members to access emergency health information.',
+                        style: TextStyle(fontSize: 11),
+                      ),
                       value: emergencyAccessEnabled,
                       activeThumbColor: green,
-                      onChanged: (value) => setModalState(() => emergencyAccessEnabled = value),
+                      onChanged: (value) =>
+                          setModalState(() => emergencyAccessEnabled = value),
                     ),
-                    if (_isFemaleMember(member))
+                    if (_isFemaleMember(member) ||
+                        womensHealthEnabled ||
+                        (member['gender']?.toString().isEmpty ?? true))
                       SwitchListTile(
                         contentPadding: EdgeInsets.zero,
-                        title: const Text("Women's Health", style: TextStyle(fontWeight: FontWeight.w700)),
-                        subtitle: const Text('Enable private menstrual cycle and women’s health tracking.', style: TextStyle(fontSize: 11)),
+                        title: const Text(
+                          "Women's Health",
+                          style: TextStyle(fontWeight: FontWeight.w700),
+                        ),
+                        subtitle: const Text(
+                          'Enable private menstrual cycle and women’s health tracking.',
+                          style: TextStyle(fontSize: 11),
+                        ),
                         value: womensHealthEnabled,
                         activeThumbColor: terracotta,
-                        onChanged: (value) => setModalState(() => womensHealthEnabled = value),
+                        onChanged: (value) =>
+                            setModalState(() => womensHealthEnabled = value),
                       ),
                     const SizedBox(height: 20),
                     SizedBox(
@@ -1908,26 +2980,56 @@ class _HealthScreenState extends State<HealthScreen> {
                         onPressed: _isSaving
                             ? null
                             : () async {
+                                if (_isSaving) return;
                                 setState(() => _isSaving = true);
                                 final updated = <String, dynamic>{
+                                  ...profile,
                                   'familyId': widget.familyId,
-                                  'familyMemberId': _selectedMemberId,
-                                  'dateOfBirth': dobController.text.trim(),
+                                  'familyMemberId': profileId,
+                                  'dateOfBirth':
+                                      dobController.text.trim().isEmpty
+                                      ? null
+                                      : dobController.text.trim(),
                                   'bloodType': selectedBloodType,
-                                  'heightCm': double.tryParse(heightController.text.trim()),
-                                  'weightKg': double.tryParse(weightController.text.trim()),
+                                  'heightCm': double.tryParse(
+                                    heightController.text.trim(),
+                                  ),
+                                  'weightKg': double.tryParse(
+                                    weightController.text.trim(),
+                                  ),
                                   'allergies': allergiesController.text.trim(),
-                                  'knownConditions': conditionsController.text.trim(),
-                                  'previousSurgeries': surgeryController.text.trim(),
-                                  'previousHospitalizations': hospitalizationController.text.trim(),
-                                  'specialMedicalNotes': notesController.text.trim(),
-                                  'primaryPhysicianName': doctorController.text.trim(),
-                                  'primaryPhysicianPhone': doctorPhoneController.text.trim(),
-                                  'hospitalOrClinic': clinicController.text.trim(),
-                                  'insuranceProvider': insuranceController.text.trim(),
-                                  'insurancePolicyNumber': policyController.text.trim(),
+                                  'knownConditions': conditionsController.text
+                                      .trim(),
+                                  'previousSurgeries': surgeryController.text
+                                      .trim(),
+                                  'previousHospitalizations':
+                                      hospitalizationController.text.trim(),
+                                  'specialMedicalNotes': notesController.text
+                                      .trim(),
+                                  'primaryPhysicianName': doctorController.text
+                                      .trim(),
+                                  'primaryPhysicianPhone': doctorPhoneController
+                                      .text
+                                      .trim(),
+                                  'hospitalOrClinic': clinicController.text
+                                      .trim(),
+                                  'insuranceProvider': insuranceController.text
+                                      .trim(),
+                                  'insurancePolicyNumber': policyController.text
+                                      .trim(),
+                                  'insuranceExpiryDate':
+                                      insuranceExpiry.text.trim().isEmpty
+                                      ? null
+                                      : insuranceExpiry.text.trim(),
+                                  'emergencyContactName': emergencyName.text
+                                      .trim(),
+                                  'emergencyContactRelationship':
+                                      emergencyRelation.text.trim(),
+                                  'emergencyContactPhone': emergencyPhone.text
+                                      .trim(),
                                   'womensHealthEnabled': womensHealthEnabled,
-                                  'emergencyAccessEnabled': emergencyAccessEnabled,
+                                  'emergencyAccessEnabled':
+                                      emergencyAccessEnabled,
                                 };
 
                                 try {
@@ -1938,23 +3040,43 @@ class _HealthScreenState extends State<HealthScreen> {
                                   await _loadSelectedMember();
                                   if (!mounted) return;
                                   // ignore: use_build_context_synchronously
-                                  ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Health profile saved.')));
-                                } catch (_) {
+                                  ScaffoldMessenger.of(this.context).showSnackBar(
+                                    const SnackBar(
+                                      content: Text('Health profile saved.'),
+                                    ),
+                                  );
+                                } catch (e) {
                                   if (!mounted) return;
                                   // ignore: use_build_context_synchronously
-                                  ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Could not save the health profile.')));
+                                  ScaffoldMessenger.of(this.context).showSnackBar(
+                                    SnackBar(content: Text(e.toString())),
+                                  );
                                 } finally {
-                                  if (mounted) setState(() => _isSaving = false);
+                                  if (mounted) {
+                                    setState(() => _isSaving = false);
+                                  }
                                 }
                               },
                         style: ElevatedButton.styleFrom(
                           backgroundColor: forest,
                           foregroundColor: white,
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(15),
+                          ),
                         ),
                         child: _isSaving
-                            ? const SizedBox(width: 22, height: 22, child: CircularProgressIndicator(strokeWidth: 2, color: white))
-                            : const Text('Save health profile', style: TextStyle(fontWeight: FontWeight.w800)),
+                            ? const SizedBox(
+                                width: 22,
+                                height: 22,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                  color: white,
+                                ),
+                              )
+                            : const Text(
+                                'Save health profile',
+                                style: TextStyle(fontWeight: FontWeight.w800),
+                              ),
                       ),
                     ),
                   ],
@@ -1968,51 +3090,91 @@ class _HealthScreenState extends State<HealthScreen> {
   }
 
   bool _isFemaleMember(Map<String, dynamic> member) {
-    final name = _getFriendlyName(member).toLowerCase();
     final role = _getFriendlyRole(member).toLowerCase();
     final gender = member['gender']?.toString().toLowerCase() ?? '';
-    
-    return name.contains('lily') || 
-           role.contains('mother') || 
-           role.contains('daughter') || 
-           role.contains('grandmother') || 
-           role.contains('sister') || 
-           role.contains('female') || 
-           gender == 'female';
+
+    return role.contains('mother') ||
+        role.contains('daughter') ||
+        role.contains('grandmother') ||
+        role.contains('sister') ||
+        role.contains('female') ||
+        gender == 'female';
   }
 
   void _showAddMedicineModal({Map<String, dynamic>? existing}) {
-    final nameController = TextEditingController(text: existing?['name']?.toString() ?? '');
-    final dosageController = TextEditingController(text: existing?['dosage']?.toString() ?? '');
-    final frequencyController = TextEditingController(text: existing?['frequency']?.toString() ?? '');
-    final quantityController = TextEditingController(text: existing?['remainingQuantity']?.toString() ?? '');
-    final refillController = TextEditingController(text: existing?['refillThreshold']?.toString() ?? '');
+    final nameController = TextEditingController(
+      text: existing?['name']?.toString() ?? '',
+    );
+    final dosageController = TextEditingController(
+      text: existing?['dosage']?.toString() ?? '',
+    );
+    final frequencyController = TextEditingController(
+      text: existing?['frequency']?.toString() ?? '',
+    );
+    final quantityController = TextEditingController(
+      text: existing?['remainingQuantity']?.toString() ?? '',
+    );
+    final refillController = TextEditingController(
+      text: existing?['refillThreshold']?.toString() ?? '',
+    );
 
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
       backgroundColor: white,
-      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(25))),
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(25)),
+      ),
       builder: (context) {
         return Padding(
-          padding: EdgeInsets.only(left: 22, right: 22, top: 22, bottom: MediaQuery.of(context).viewInsets.bottom + 22),
+          padding: EdgeInsets.only(
+            left: 22,
+            right: 22,
+            top: 22,
+            bottom: MediaQuery.of(context).viewInsets.bottom + 22,
+          ),
           child: SingleChildScrollView(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(existing == null ? 'Add Medicine' : 'Edit Medicine', style: const TextStyle(color: textDark, fontSize: 20, fontWeight: FontWeight.w800)),
+                Text(
+                  existing == null ? 'Add Medicine' : 'Edit Medicine',
+                  style: const TextStyle(
+                    color: textDark,
+                    fontSize: 20,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
                 const SizedBox(height: 20),
                 _inputField(nameController, 'Medicine name', 'e.g. Metformin'),
                 const SizedBox(height: 10),
                 _inputField(dosageController, 'Dosage', 'e.g. 500 mg'),
                 const SizedBox(height: 10),
-                _inputField(frequencyController, 'Schedule', 'e.g. Morning after breakfast'),
+                _inputField(
+                  frequencyController,
+                  'Schedule',
+                  'e.g. Morning after breakfast',
+                ),
                 const SizedBox(height: 10),
                 Row(
                   children: [
-                    Expanded(child: _inputField(quantityController, 'Remaining', 'e.g. 20', keyboardType: TextInputType.number)),
+                    Expanded(
+                      child: _inputField(
+                        quantityController,
+                        'Remaining',
+                        'e.g. 20',
+                        keyboardType: TextInputType.number,
+                      ),
+                    ),
                     const SizedBox(width: 10),
-                    Expanded(child: _inputField(refillController, 'Refill at', 'e.g. 5', keyboardType: TextInputType.number)),
+                    Expanded(
+                      child: _inputField(
+                        refillController,
+                        'Refill at',
+                        'e.g. 5',
+                        keyboardType: TextInputType.number,
+                      ),
+                    ),
                   ],
                 ),
                 const SizedBox(height: 20),
@@ -2026,36 +3188,66 @@ class _HealthScreenState extends State<HealthScreen> {
                           ? '$baseUrl/health/medicines/${widget.familyId}/$_selectedMemberId'
                           : '$baseUrl/health/medicines/${existing['id']}';
 
+                      if (_isSaving) return;
+                      setState(() => _isSaving = true);
                       try {
-                        final response = await (existing == null ? http.post : http.put)(
-                          Uri.parse(url),
-                          headers: {'Content-Type': 'application/json'},
-                          body: jsonEncode({
-                            'name': nameController.text.trim(),
-                            'dosage': dosageController.text.trim(),
-                            'frequency': frequencyController.text.trim(),
-                            'remainingQuantity': int.tryParse(quantityController.text.trim()),
-                            'refillThreshold': int.tryParse(refillController.text.trim()),
-                            'active': true,
-                          }),
-                        );
+                        final response =
+                            await (existing == null ? _http.post : _http.put)(
+                              Uri.parse(url),
+                              headers: {'Content-Type': 'application/json'},
+                              body: jsonEncode({
+                                ...?existing,
+                                'name': nameController.text.trim(),
+                                'dosage': dosageController.text.trim(),
+                                'frequency': frequencyController.text.trim(),
+                                'remainingQuantity': int.tryParse(
+                                  quantityController.text.trim(),
+                                ),
+                                'refillThreshold': int.tryParse(
+                                  refillController.text.trim(),
+                                ),
+                                'active': true,
+                              }),
+                            );
                         if (!mounted) return;
-                        if (response.statusCode == 200 || response.statusCode == 201) {
+                        if (response.statusCode == 200 ||
+                            response.statusCode == 201) {
                           // ignore: use_build_context_synchronously
                           Navigator.pop(context);
                           await _loadSelectedMember();
                           if (!mounted) return;
                           // ignore: use_build_context_synchronously
-                          ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(existing == null ? 'Medicine added.' : 'Medicine updated.')));
+                          ScaffoldMessenger.of(this.context).showSnackBar(
+                            SnackBar(
+                              content: Text(
+                                existing == null
+                                    ? 'Medicine added.'
+                                    : 'Medicine updated.',
+                              ),
+                            ),
+                          );
                         }
-                      } catch (_) {
+                      } catch (e) {
                         if (!mounted) return;
                         // ignore: use_build_context_synchronously
-                        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Could not save medicine.')));
+                        ScaffoldMessenger.of(
+                          this.context,
+                        ).showSnackBar(SnackBar(content: Text(e.toString())));
+                      } finally {
+                        if (mounted) setState(() => _isSaving = false);
                       }
                     },
-                    style: ElevatedButton.styleFrom(backgroundColor: forest, foregroundColor: white, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14))),
-                    child: Text(existing == null ? 'Save medicine' : 'Update medicine', style: const TextStyle(fontWeight: FontWeight.w800)),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: forest,
+                      foregroundColor: white,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(14),
+                      ),
+                    ),
+                    child: Text(
+                      existing == null ? 'Save medicine' : 'Update medicine',
+                      style: const TextStyle(fontWeight: FontWeight.w800),
+                    ),
                   ),
                 ),
               ],
@@ -2067,39 +3259,80 @@ class _HealthScreenState extends State<HealthScreen> {
   }
 
   void _showAddAppointmentModal({Map<String, dynamic>? existing}) {
-    final doctorController = TextEditingController(text: existing?['doctorName']?.toString() ?? '');
-    final specialtyController = TextEditingController(text: existing?['specialty']?.toString() ?? '');
-    final clinicController = TextEditingController(text: existing?['hospitalOrClinic']?.toString() ?? '');
-    final reasonController = TextEditingController(text: existing?['reason']?.toString() ?? '');
-    DateTime selectedDate = existing?['appointmentDateTime'] != null ? DateTime.parse(existing!['appointmentDateTime']) : DateTime.now();
+    final doctorController = TextEditingController(
+      text: existing?['doctorName']?.toString() ?? '',
+    );
+    final specialtyController = TextEditingController(
+      text: existing?['specialty']?.toString() ?? '',
+    );
+    final clinicController = TextEditingController(
+      text: existing?['hospitalOrClinic']?.toString() ?? '',
+    );
+    final reasonController = TextEditingController(
+      text: existing?['reason']?.toString() ?? '',
+    );
+    String appointmentStatus = existing?['status']?.toString() ?? 'UPCOMING';
+    DateTime selectedDate = existing?['appointmentDateTime'] != null
+        ? DateTime.parse(existing!['appointmentDateTime'])
+        : DateTime.now();
 
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
       backgroundColor: white,
-      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(25))),
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(25)),
+      ),
       builder: (context) {
         return StatefulBuilder(
           builder: (context, setModalState) {
             return Padding(
-              padding: EdgeInsets.only(left: 22, right: 22, top: 22, bottom: MediaQuery.of(context).viewInsets.bottom + 22),
+              padding: EdgeInsets.only(
+                left: 22,
+                right: 22,
+                top: 22,
+                bottom: MediaQuery.of(context).viewInsets.bottom + 22,
+              ),
               child: SingleChildScrollView(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(existing == null ? 'Add Appointment' : 'Edit Appointment', style: const TextStyle(color: textDark, fontSize: 20, fontWeight: FontWeight.w800)),
+                    Text(
+                      existing == null ? 'Add Appointment' : 'Edit Appointment',
+                      style: const TextStyle(
+                        color: textDark,
+                        fontSize: 20,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
                     const SizedBox(height: 20),
                     _inputField(doctorController, 'Doctor', 'Doctor name'),
                     const SizedBox(height: 10),
-                    _inputField(specialtyController, 'Specialty', 'e.g. Physician'),
+                    _inputField(
+                      specialtyController,
+                      'Specialty',
+                      'e.g. Physician',
+                    ),
                     const SizedBox(height: 10),
-                    _inputField(clinicController, 'Hospital / Clinic', 'Clinic name'),
+                    _inputField(
+                      clinicController,
+                      'Hospital / Clinic',
+                      'Clinic name',
+                    ),
                     const SizedBox(height: 10),
-                    _inputField(reasonController, 'Reason', 'Why is this appointment?', maxLines: 2),
+                    _inputField(
+                      reasonController,
+                      'Reason',
+                      'Why is this appointment?',
+                      maxLines: 2,
+                    ),
                     const SizedBox(height: 15),
                     ListTile(
                       contentPadding: EdgeInsets.zero,
-                      leading: const Icon(Icons.calendar_today_outlined, color: green),
+                      leading: const Icon(
+                        Icons.calendar_today_outlined,
+                        color: green,
+                      ),
                       title: const Text('Appointment date'),
                       subtitle: Text(_formatDate(selectedDate)),
                       onTap: () async {
@@ -2109,7 +3342,58 @@ class _HealthScreenState extends State<HealthScreen> {
                           firstDate: DateTime(DateTime.now().year - 1),
                           lastDate: DateTime(DateTime.now().year + 3),
                         );
-                        if (date != null) setModalState(() => selectedDate = date);
+                        if (date != null) {
+                          setModalState(
+                            () => selectedDate = DateTime(
+                              date.year,
+                              date.month,
+                              date.day,
+                              selectedDate.hour,
+                              selectedDate.minute,
+                            ),
+                          );
+                        }
+                      },
+                    ),
+                    DropdownButtonFormField<String>(
+                      initialValue: appointmentStatus,
+                      decoration: _inputDecoration('Status'),
+                      items: ['UPCOMING', 'COMPLETED', 'CANCELLED']
+                          .map(
+                            (status) => DropdownMenuItem(
+                              value: status,
+                              child: Text(status),
+                            ),
+                          )
+                          .toList(),
+                      onChanged: (value) {
+                        if (value != null) {
+                          setModalState(() => appointmentStatus = value);
+                        }
+                      },
+                    ),
+                    ListTile(
+                      leading: const Icon(Icons.access_time, color: green),
+                      title: const Text('Appointment time'),
+                      subtitle: Text(
+                        TimeOfDay.fromDateTime(selectedDate).format(context),
+                      ),
+                      onTap: () async {
+                        final time = await showTimePicker(
+                          context: context,
+                          initialTime: TimeOfDay.fromDateTime(selectedDate),
+                        );
+                        if (time != null) {
+                          setModalState(
+                            () => selectedDate = DateTime(
+                              selectedDate.year,
+                              selectedDate.month,
+                              selectedDate.day,
+                              time.hour,
+                              time.minute,
+                            ),
+                          );
+                        }
                       },
                     ),
                     const SizedBox(height: 15),
@@ -2123,36 +3407,69 @@ class _HealthScreenState extends State<HealthScreen> {
                               ? '$baseUrl/health/appointments/${widget.familyId}/$_selectedMemberId'
                               : '$baseUrl/health/appointments/${existing['id']}';
 
+                          if (_isSaving) return;
+                          setState(() => _isSaving = true);
                           try {
-                            final response = await (existing == null ? http.post : http.put)(
-                              Uri.parse(url),
-                              headers: {'Content-Type': 'application/json'},
-                              body: jsonEncode({
-                                'doctorName': doctorController.text.trim(),
-                                'specialty': specialtyController.text.trim(),
-                                'hospitalOrClinic': clinicController.text.trim(),
-                                'appointmentDateTime': selectedDate.toIso8601String(),
-                                'reason': reasonController.text.trim(),
-                                'status': existing?['status'] ?? 'UPCOMING',
-                              }),
-                            );
+                            final response =
+                                await (existing == null
+                                    ? _http.post
+                                    : _http.put)(
+                                  Uri.parse(url),
+                                  headers: {'Content-Type': 'application/json'},
+                                  body: jsonEncode({
+                                    ...?existing,
+                                    'doctorName': doctorController.text.trim(),
+                                    'specialty': specialtyController.text
+                                        .trim(),
+                                    'hospitalOrClinic': clinicController.text
+                                        .trim(),
+                                    'appointmentDateTime': selectedDate
+                                        .toIso8601String(),
+                                    'reason': reasonController.text.trim(),
+                                    'status': appointmentStatus,
+                                  }),
+                                );
                             if (!mounted) return;
-                            if (response.statusCode == 200 || response.statusCode == 201) {
+                            if (response.statusCode == 200 ||
+                                response.statusCode == 201) {
                               // ignore: use_build_context_synchronously
                               Navigator.pop(context);
                               await _loadSelectedMember();
                               if (!mounted) return;
                               // ignore: use_build_context_synchronously
-                              ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(existing == null ? 'Appointment added.' : 'Appointment updated.')));
+                              ScaffoldMessenger.of(this.context).showSnackBar(
+                                SnackBar(
+                                  content: Text(
+                                    existing == null
+                                        ? 'Appointment added.'
+                                        : 'Appointment updated.',
+                                  ),
+                                ),
+                              );
                             }
-                          } catch (_) {
+                          } catch (e) {
                             if (!mounted) return;
                             // ignore: use_build_context_synchronously
-                            ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Could not save appointment.')));
+                            ScaffoldMessenger.of(this.context).showSnackBar(
+                              SnackBar(content: Text(e.toString())),
+                            );
+                          } finally {
+                            if (mounted) setState(() => _isSaving = false);
                           }
                         },
-                        style: ElevatedButton.styleFrom(backgroundColor: forest, foregroundColor: white, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14))),
-                        child: Text(existing == null ? 'Save appointment' : 'Update appointment', style: const TextStyle(fontWeight: FontWeight.w800)),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: forest,
+                          foregroundColor: white,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(14),
+                          ),
+                        ),
+                        child: Text(
+                          existing == null
+                              ? 'Save appointment'
+                              : 'Update appointment',
+                          style: const TextStyle(fontWeight: FontWeight.w800),
+                        ),
                       ),
                     ),
                   ],
@@ -2166,40 +3483,80 @@ class _HealthScreenState extends State<HealthScreen> {
   }
 
   void _showAddRecordModal({Map<String, dynamic>? existing}) {
-    final titleController = TextEditingController(text: existing?['title']?.toString() ?? '');
-    final detailsController = TextEditingController(text: existing?['details']?.toString() ?? '');
+    final titleController = TextEditingController(
+      text: existing?['title']?.toString() ?? '',
+    );
+    final detailsController = TextEditingController(
+      text: existing?['details']?.toString() ?? '',
+    );
     String category = existing?['category']?.toString() ?? 'Medical Record';
 
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
       backgroundColor: white,
-      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(25))),
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(25)),
+      ),
       builder: (context) {
         return StatefulBuilder(
           builder: (context, setModalState) {
             return Padding(
-              padding: EdgeInsets.only(left: 22, right: 22, top: 22, bottom: MediaQuery.of(context).viewInsets.bottom + 22),
+              padding: EdgeInsets.only(
+                left: 22,
+                right: 22,
+                top: 22,
+                bottom: MediaQuery.of(context).viewInsets.bottom + 22,
+              ),
               child: SingleChildScrollView(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(existing == null ? 'Add Health Record' : 'Edit Health Record', style: const TextStyle(color: textDark, fontSize: 20, fontWeight: FontWeight.w800)),
+                    Text(
+                      existing == null
+                          ? 'Add Health Record'
+                          : 'Edit Health Record',
+                      style: const TextStyle(
+                        color: textDark,
+                        fontSize: 20,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
                     const SizedBox(height: 20),
                     _inputField(titleController, 'Title', 'e.g. Blood Test'),
                     const SizedBox(height: 10),
                     DropdownButtonFormField<String>(
                       initialValue: category,
                       decoration: _inputDecoration('Category'),
-                      items: ['Medical Record', 'Blood Report', 'Prescription', 'Diagnosis', 'Hospital Visit', 'Other']
-                          .map((item) => DropdownMenuItem(value: item, child: Text(item)))
-                          .toList(),
+                      items:
+                          [
+                                'Medical Record',
+                                'Blood Report',
+                                'Prescription',
+                                'Diagnosis',
+                                'Hospital Visit',
+                                'Other',
+                              ]
+                              .map(
+                                (item) => DropdownMenuItem(
+                                  value: item,
+                                  child: Text(item),
+                                ),
+                              )
+                              .toList(),
                       onChanged: (value) {
-                        if (value != null) setModalState(() => category = value);
+                        if (value != null) {
+                          setModalState(() => category = value);
+                        }
                       },
                     ),
                     const SizedBox(height: 10),
-                    _inputField(detailsController, 'Details', 'Add notes about this record', maxLines: 4),
+                    _inputField(
+                      detailsController,
+                      'Details',
+                      'Add notes about this record',
+                      maxLines: 4,
+                    ),
                     const SizedBox(height: 20),
                     SizedBox(
                       width: double.infinity,
@@ -2211,34 +3568,64 @@ class _HealthScreenState extends State<HealthScreen> {
                               ? '$baseUrl/health/records/${widget.familyId}/$_selectedMemberId'
                               : '$baseUrl/health/records/${existing['id']}';
 
+                          if (_isSaving) return;
+                          setState(() => _isSaving = true);
                           try {
-                            final response = await (existing == null ? http.post : http.put)(
-                              Uri.parse(url),
-                              headers: {'Content-Type': 'application/json'},
-                              body: jsonEncode({
-                                'category': category,
-                                'title': titleController.text.trim(),
-                                'details': detailsController.text.trim(),
-                                'recordDate': _formatDate(DateTime.now()),
-                              }),
-                            );
+                            final response =
+                                await (existing == null
+                                    ? _http.post
+                                    : _http.put)(
+                                  Uri.parse(url),
+                                  headers: {'Content-Type': 'application/json'},
+                                  body: jsonEncode({
+                                    ...?existing,
+                                    'category': category,
+                                    'title': titleController.text.trim(),
+                                    'details': detailsController.text.trim(),
+                                    'recordDate':
+                                        existing?['recordDate'] ??
+                                        _formatDate(DateTime.now()),
+                                  }),
+                                );
                             if (!mounted) return;
-                            if (response.statusCode == 200 || response.statusCode == 201) {
+                            if (response.statusCode == 200 ||
+                                response.statusCode == 201) {
                               // ignore: use_build_context_synchronously
                               Navigator.pop(context);
                               await _loadSelectedMember();
                               if (!mounted) return;
                               // ignore: use_build_context_synchronously
-                              ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(existing == null ? 'Health record saved.' : 'Health record updated.')));
+                              ScaffoldMessenger.of(this.context).showSnackBar(
+                                SnackBar(
+                                  content: Text(
+                                    existing == null
+                                        ? 'Health record saved.'
+                                        : 'Health record updated.',
+                                  ),
+                                ),
+                              );
                             }
-                          } catch (_) {
+                          } catch (e) {
                             if (!mounted) return;
                             // ignore: use_build_context_synchronously
-                            ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Could not save health record.')));
+                            ScaffoldMessenger.of(this.context).showSnackBar(
+                              SnackBar(content: Text(e.toString())),
+                            );
+                          } finally {
+                            if (mounted) setState(() => _isSaving = false);
                           }
                         },
-                        style: ElevatedButton.styleFrom(backgroundColor: forest, foregroundColor: white, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14))),
-                        child: Text(existing == null ? 'Save record' : 'Update record', style: const TextStyle(fontWeight: FontWeight.w800)),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: forest,
+                          foregroundColor: white,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(14),
+                          ),
+                        ),
+                        child: Text(
+                          existing == null ? 'Save record' : 'Update record',
+                          style: const TextStyle(fontWeight: FontWeight.w800),
+                        ),
                       ),
                     ),
                   ],
@@ -2251,19 +3638,100 @@ class _HealthScreenState extends State<HealthScreen> {
     );
   }
 
-  void _showAddDocumentMessage() {
-    showDialog(
-      context: context,
-      builder: (context) {
-        return AlertDialog(
-          title: const Text('Medical Documents'),
-          content: const Text('The document upload UI can be connected to your file storage service here.'),
+  Future<void> _showAddDocumentMessage() async {
+    final profileId = _selectedMemberId;
+    if (profileId == null || _isSaving) return;
+    try {
+      final selection = await FilePicker.pickFiles(
+        type: FileType.custom,
+        allowedExtensions: ['pdf', 'png', 'jpg', 'jpeg'],
+        withData: true,
+      );
+      if (selection == null || !mounted) return;
+      final file = selection.files.single;
+      if (file.size == 0 || file.size > 10 * 1024 * 1024) {
+        throw StateError('Choose a document smaller than 10 MB');
+      }
+      final bytes = file.bytes ?? await selection.xFiles.single.readAsBytes();
+      if (!mounted || _selectedMemberId != profileId) return;
+      final titleController = TextEditingController(text: file.name);
+      final categoryController = TextEditingController(text: 'Medical');
+      final approved = await showDialog<bool>(
+        context: context,
+        builder: (dialogContext) => AlertDialog(
+          title: const Text('Add medical document'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              _inputField(titleController, 'Title', 'Document title'),
+              const SizedBox(height: 12),
+              _inputField(categoryController, 'Category', 'Medical'),
+            ],
+          ),
           actions: [
-            TextButton(onPressed: () => Navigator.pop(context), child: const Text('Close')),
+            TextButton(
+              onPressed: () => Navigator.pop(dialogContext, false),
+              child: const Text('Cancel'),
+            ),
+            TextButton(
+              onPressed: () {
+                if (titleController.text.trim().isNotEmpty) {
+                  Navigator.pop(dialogContext, true);
+                }
+              },
+              child: const Text('Upload'),
+            ),
           ],
-        );
-      },
-    );
+        ),
+      );
+      if (approved != true || !mounted || _selectedMemberId != profileId) {
+        return;
+      }
+      setState(() => _isSaving = true);
+      final request =
+          http.MultipartRequest(
+              'POST',
+              Uri.parse(
+                '$baseUrl/health/documents/${widget.familyId}/$profileId/upload',
+              ),
+            )
+            ..fields['title'] = titleController.text.trim()
+            ..fields['category'] = categoryController.text.trim()
+            ..files.add(
+              http.MultipartFile.fromBytes('file', bytes, filename: file.name),
+            );
+      await _http.upload(request);
+      if (mounted && _selectedMemberId == profileId) {
+        await _loadSelectedMember();
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(e.toString())));
+      }
+    } finally {
+      if (mounted) setState(() => _isSaving = false);
+    }
+  }
+
+  Future<void> _downloadDocument(Map<String, dynamic> document) async {
+    try {
+      final response = await _http.get(
+        Uri.parse('$baseUrl/health/documents/${document['id']}/file'),
+      );
+      if (!mounted) return;
+      await FilePicker.saveFile(
+        fileName: document['fileName']?.toString() ?? 'document',
+        bytes: response.bodyBytes,
+      );
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(e.toString())));
+      }
+    }
   }
 
   void _showEmergencyDialog(Map<String, dynamic> member) {
@@ -2274,7 +3742,9 @@ class _HealthScreenState extends State<HealthScreen> {
       context: context,
       isScrollControlled: true,
       backgroundColor: white,
-      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(26))),
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(26)),
+      ),
       builder: (context) {
         return SafeArea(
           child: Padding(
@@ -2288,16 +3758,35 @@ class _HealthScreenState extends State<HealthScreen> {
                     Container(
                       width: 44,
                       height: 44,
-                      decoration: const BoxDecoration(color: Color(0xFFFFE9E4), shape: BoxShape.circle),
-                      child: const Icon(Icons.medical_information_outlined, color: terracotta),
+                      decoration: const BoxDecoration(
+                        color: Color(0xFFFFE9E4),
+                        shape: BoxShape.circle,
+                      ),
+                      child: const Icon(
+                        Icons.medical_information_outlined,
+                        color: terracotta,
+                      ),
                     ),
                     const SizedBox(width: 12),
                     Expanded(
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          const Text('Emergency Health View', style: TextStyle(color: textDark, fontSize: 18, fontWeight: FontWeight.w800)),
-                          Text(name, style: const TextStyle(color: textSecondary, fontSize: 12)),
+                          const Text(
+                            'Emergency Health View',
+                            style: TextStyle(
+                              color: textDark,
+                              fontSize: 18,
+                              fontWeight: FontWeight.w800,
+                            ),
+                          ),
+                          Text(
+                            name,
+                            style: const TextStyle(
+                              color: textSecondary,
+                              fontSize: 12,
+                            ),
+                          ),
                         ],
                       ),
                     ),
@@ -2307,9 +3796,18 @@ class _HealthScreenState extends State<HealthScreen> {
                 _emergencyRow('Blood Type', _value(profile['bloodType'])),
                 _emergencyRow('Allergies', _value(profile['allergies'])),
                 _emergencyRow('Conditions', _value(profile['knownConditions'])),
-                _emergencyRow('Important Notes', _value(profile['specialMedicalNotes'])),
-                _emergencyRow('Primary Physician', _value(profile['primaryPhysicianName'])),
-                _emergencyRow('Physician Phone', _value(profile['primaryPhysicianPhone'])),
+                _emergencyRow(
+                  'Important Notes',
+                  _value(profile['specialMedicalNotes']),
+                ),
+                _emergencyRow(
+                  'Primary Physician',
+                  _value(profile['primaryPhysicianName']),
+                ),
+                _emergencyRow(
+                  'Physician Phone',
+                  _value(profile['primaryPhysicianPhone']),
+                ),
               ],
             ),
           ),
@@ -2324,8 +3822,23 @@ class _HealthScreenState extends State<HealthScreen> {
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          SizedBox(width: 125, child: Text(label, style: const TextStyle(color: muted, fontSize: 11))),
-          Expanded(child: Text(value, style: const TextStyle(color: textDark, fontSize: 12, fontWeight: FontWeight.w700))),
+          SizedBox(
+            width: 125,
+            child: Text(
+              label,
+              style: const TextStyle(color: muted, fontSize: 11),
+            ),
+          ),
+          Expanded(
+            child: Text(
+              value,
+              style: const TextStyle(
+                color: textDark,
+                fontSize: 12,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+          ),
         ],
       ),
     );
@@ -2333,7 +3846,10 @@ class _HealthScreenState extends State<HealthScreen> {
 
   Widget _buildBottomNavigation() {
     return Container(
-      decoration: BoxDecoration(color: white, border: Border(top: BorderSide(color: border))),
+      decoration: BoxDecoration(
+        color: white,
+        border: Border(top: BorderSide(color: border)),
+      ),
       child: BottomNavigationBar(
         currentIndex: _currentNavIndex,
         type: BottomNavigationBarType.fixed,
@@ -2342,28 +3858,33 @@ class _HealthScreenState extends State<HealthScreen> {
         unselectedItemColor: Colors.grey.shade400,
         elevation: 0,
         items: const [
-          BottomNavigationBarItem(icon: Icon(Icons.home_outlined), activeIcon: Icon(Icons.home_rounded), label: 'Home'),
-          BottomNavigationBarItem(icon: Icon(Icons.group_outlined), activeIcon: Icon(Icons.group_rounded), label: 'Family'),
-          BottomNavigationBarItem(icon: Icon(Icons.calendar_today_outlined), activeIcon: Icon(Icons.calendar_today_rounded), label: 'Calendar'),
-          BottomNavigationBarItem(icon: Icon(Icons.task_outlined), activeIcon: Icon(Icons.task_rounded), label: 'Tasks'),
-          BottomNavigationBarItem(icon: Icon(Icons.menu_outlined), activeIcon: Icon(Icons.menu_rounded), label: 'More'),
+          BottomNavigationBarItem(
+            icon: Icon(Icons.home_outlined),
+            activeIcon: Icon(Icons.home_rounded),
+            label: 'Home',
+          ),
+          BottomNavigationBarItem(
+            icon: Icon(Icons.group_outlined),
+            activeIcon: Icon(Icons.group_rounded),
+            label: 'Family',
+          ),
+          BottomNavigationBarItem(
+            icon: Icon(Icons.calendar_today_outlined),
+            activeIcon: Icon(Icons.calendar_today_rounded),
+            label: 'Calendar',
+          ),
+          BottomNavigationBarItem(
+            icon: Icon(Icons.task_outlined),
+            activeIcon: Icon(Icons.task_rounded),
+            label: 'Tasks',
+          ),
+          BottomNavigationBarItem(
+            icon: Icon(Icons.menu_outlined),
+            activeIcon: Icon(Icons.menu_rounded),
+            label: 'More',
+          ),
         ],
-        onTap: (index) {
-          setState(() => _currentNavIndex = index);
-          if (index == 3) {
-            Navigator.push(
-              context,
-              MaterialPageRoute(
-                builder: (context) => GlobalTasksScreen(
-                  userEmail: widget.userEmail,
-                  familyId: widget.familyId,
-                ),
-              ),
-            );
-          } else if (index == 4) {
-            Navigator.pop(context);
-          }
-        },
+        onTap: (index) => MainNavigationShell.navigate(context, userEmail: widget.userEmail, familyId: widget.familyId, index: index),
       ),
     );
   }
@@ -2376,14 +3897,29 @@ class _HealthScreenState extends State<HealthScreen> {
         const SizedBox(height: 80),
         const Icon(Icons.cloud_off_rounded, size: 54, color: muted),
         const SizedBox(height: 18),
-        const Text('Could not load health information', textAlign: TextAlign.center, style: TextStyle(color: textDark, fontSize: 17, fontWeight: FontWeight.w800)),
+        const Text(
+          'Could not load health information',
+          textAlign: TextAlign.center,
+          style: TextStyle(
+            color: textDark,
+            fontSize: 17,
+            fontWeight: FontWeight.w800,
+          ),
+        ),
         const SizedBox(height: 8),
-        Text(_errorMessage ?? 'Please try again.', textAlign: TextAlign.center, style: const TextStyle(color: textSecondary, fontSize: 12)),
+        Text(
+          _errorMessage ?? 'Please try again.',
+          textAlign: TextAlign.center,
+          style: const TextStyle(color: textSecondary, fontSize: 12),
+        ),
         const SizedBox(height: 18),
         Center(
           child: ElevatedButton(
-            onPressed: _loadSelectedMember,
-            style: ElevatedButton.styleFrom(backgroundColor: forest, foregroundColor: white),
+            onPressed: _initializeMembers,
+            style: ElevatedButton.styleFrom(
+              backgroundColor: forest,
+              foregroundColor: white,
+            ),
             child: const Text('Try again'),
           ),
         ),
@@ -2400,26 +3936,52 @@ class _HealthScreenState extends State<HealthScreen> {
   }) {
     return Container(
       padding: const EdgeInsets.all(22),
-      decoration: BoxDecoration(color: white, borderRadius: BorderRadius.circular(18), border: Border.all(color: border)),
+      decoration: BoxDecoration(
+        color: white,
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: border),
+      ),
       child: Column(
         children: [
           Container(
             width: 56,
             height: 56,
-            decoration: const BoxDecoration(color: paleGreen, shape: BoxShape.circle),
+            decoration: const BoxDecoration(
+              color: paleGreen,
+              shape: BoxShape.circle,
+            ),
             child: Icon(icon, color: forest, size: 27),
           ),
           const SizedBox(height: 12),
-          Text(title, textAlign: TextAlign.center, style: const TextStyle(color: textDark, fontSize: 15, fontWeight: FontWeight.w800)),
+          Text(
+            title,
+            textAlign: TextAlign.center,
+            style: const TextStyle(
+              color: textDark,
+              fontSize: 15,
+              fontWeight: FontWeight.w800,
+            ),
+          ),
           const SizedBox(height: 6),
-          Text(message, textAlign: TextAlign.center, style: const TextStyle(color: textSecondary, fontSize: 11, height: 1.4)),
+          Text(
+            message,
+            textAlign: TextAlign.center,
+            style: const TextStyle(
+              color: textSecondary,
+              fontSize: 11,
+              height: 1.4,
+            ),
+          ),
           if (buttonText != null && onPressed != null) ...[
             const SizedBox(height: 15),
             OutlinedButton.icon(
               onPressed: onPressed,
               icon: const Icon(Icons.add_rounded, size: 17),
               label: Text(buttonText),
-              style: OutlinedButton.styleFrom(foregroundColor: green, side: const BorderSide(color: green)),
+              style: OutlinedButton.styleFrom(
+                foregroundColor: green,
+                side: const BorderSide(color: green),
+              ),
             ),
           ],
         ],
@@ -2428,13 +3990,24 @@ class _HealthScreenState extends State<HealthScreen> {
   }
 
   Widget _sectionTitle(String title) {
-    return Text(title, style: const TextStyle(color: textDark, fontSize: 17, fontWeight: FontWeight.w800));
+    return Text(
+      title,
+      style: const TextStyle(
+        color: textDark,
+        fontSize: 17,
+        fontWeight: FontWeight.w800,
+      ),
+    );
   }
 
   Widget _card({required Widget child}) {
     return Container(
       padding: const EdgeInsets.all(15),
-      decoration: BoxDecoration(color: white, borderRadius: BorderRadius.circular(18), border: Border.all(color: border)),
+      decoration: BoxDecoration(
+        color: white,
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: border),
+      ),
       child: child,
     );
   }
@@ -2446,14 +4019,27 @@ class _HealthScreenState extends State<HealthScreen> {
   Widget _statCard(String title, String value) {
     return Container(
       padding: const EdgeInsets.all(13),
-      decoration: BoxDecoration(color: white, borderRadius: BorderRadius.circular(16), border: Border.all(color: border)),
+      decoration: BoxDecoration(
+        color: white,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: border),
+      ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
           Text(title, style: const TextStyle(color: muted, fontSize: 10)),
           const SizedBox(height: 4),
-          Text(value, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: textDark, fontSize: 13, fontWeight: FontWeight.w800)),
+          Text(
+            value,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: const TextStyle(
+              color: textDark,
+              fontSize: 13,
+              fontWeight: FontWeight.w800,
+            ),
+          ),
         ],
       ),
     );
@@ -2465,8 +4051,23 @@ class _HealthScreenState extends State<HealthScreen> {
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          SizedBox(width: 135, child: Text(label, style: const TextStyle(color: muted, fontSize: 11))),
-          Expanded(child: Text(value, style: const TextStyle(color: textDark, fontSize: 12, fontWeight: FontWeight.w600))),
+          SizedBox(
+            width: 135,
+            child: Text(
+              label,
+              style: const TextStyle(color: muted, fontSize: 11),
+            ),
+          ),
+          Expanded(
+            child: Text(
+              value,
+              style: const TextStyle(
+                color: textDark,
+                fontSize: 12,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ),
         ],
       ),
     );
@@ -2475,11 +4076,24 @@ class _HealthScreenState extends State<HealthScreen> {
   Widget _modalSection(String title) {
     return Padding(
       padding: const EdgeInsets.only(bottom: 10),
-      child: Text(title, style: const TextStyle(color: textDark, fontSize: 14, fontWeight: FontWeight.w800)),
+      child: Text(
+        title,
+        style: const TextStyle(
+          color: textDark,
+          fontSize: 14,
+          fontWeight: FontWeight.w800,
+        ),
+      ),
     );
   }
 
-  Widget _inputField(TextEditingController controller, String label, String hint, {int maxLines = 1, TextInputType? keyboardType}) {
+  Widget _inputField(
+    TextEditingController controller,
+    String label,
+    String hint, {
+    int maxLines = 1,
+    TextInputType? keyboardType,
+  }) {
     return TextField(
       controller: controller,
       maxLines: maxLines,
@@ -2494,8 +4108,14 @@ class _HealthScreenState extends State<HealthScreen> {
       hintText: hint,
       filled: true,
       fillColor: const Color(0xFFF8FAF9),
-      border: OutlineInputBorder(borderRadius: BorderRadius.circular(14), borderSide: BorderSide.none),
-      focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(14), borderSide: const BorderSide(color: green)),
+      border: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(14),
+        borderSide: BorderSide.none,
+      ),
+      focusedBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(14),
+        borderSide: const BorderSide(color: green),
+      ),
       contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 13),
     );
   }

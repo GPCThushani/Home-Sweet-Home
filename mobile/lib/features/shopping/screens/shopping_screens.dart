@@ -1,8 +1,9 @@
+import 'package:mobile/shared/widgets/main_navigation_shell.dart';
+import 'package:mobile/core/services/api_config.dart';
 import 'dart:convert';
 import 'package:flutter/material.dart';
-import 'package:http/http.dart' as http;
+import 'package:mobile/core/services/authenticated_http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
-import '../../tasks/screens/global_tasks_screen.dart';
 
 class ShoppingScreen extends StatefulWidget {
   final String userEmail;
@@ -19,7 +20,7 @@ class ShoppingScreen extends StatefulWidget {
 }
 
 class _ShoppingScreenState extends State<ShoppingScreen> {
-  static const String baseUrl = 'http://localhost:8080/api';
+  static final String baseUrl = ApiConfig.baseUrl;
 
   bool _isLoading = true;
   List<dynamic> _items = [];
@@ -96,7 +97,7 @@ class _ShoppingScreenState extends State<ShoppingScreen> {
   ];
 
   List<dynamic> _history = [];
-  int _currentNavIndex = 4;
+  final int _currentNavIndex = 4;
   DateTime _previewDate = DateTime.now();
 
   static const Color ivory = Color(0xFFFAF8F3);
@@ -1228,22 +1229,7 @@ class _ShoppingScreenState extends State<ShoppingScreen> {
           BottomNavigationBarItem(icon: Icon(Icons.task_outlined), activeIcon: Icon(Icons.task_rounded), label: 'Tasks'),
           BottomNavigationBarItem(icon: Icon(Icons.menu_outlined), activeIcon: Icon(Icons.menu_rounded), label: 'More'),
         ],
-        onTap: (index) {
-          setState(() => _currentNavIndex = index);
-          if (index == 3) {
-            Navigator.push(
-              context,
-              MaterialPageRoute(
-                builder: (context) => GlobalTasksScreen(
-                  userEmail: widget.userEmail,
-                  familyId: widget.familyId,
-                ),
-              ),
-            );
-          } else if (index != 4) {
-            Navigator.maybePop(context);
-          }
-        },
+        onTap: (index) => MainNavigationShell.navigate(context, userEmail: widget.userEmail, familyId: widget.familyId, index: index),
       ),
     );
   }

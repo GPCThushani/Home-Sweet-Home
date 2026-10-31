@@ -21,23 +21,61 @@ public class SecurityConfig {
     private final AuthenticationProvider authenticationProvider;
 
     @Bean
-    public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
+    public SecurityFilterChain securityFilterChain(HttpSecurity http)
+            throws Exception {
+
         http
-            .cors(Customizer.withDefaults()) // Enables CORS integration
+            .cors(Customizer.withDefaults())
             .csrf(csrf -> csrf.disable())
+
             .authorizeHttpRequests(auth -> auth
-                .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll() // Allow browser preflight checks
-                // Explicitly permit users, error pages, family endpoints, and health endpoints
-                .requestMatchers("/api/users/**", "/error", "/api/families/**", "/api/health/**").permitAll() 
-                .requestMatchers("/api/tasks/**").authenticated()
+
+                .requestMatchers(
+                    HttpMethod.OPTIONS, "/**"
+                ).permitAll()
+
+                .requestMatchers(
+                    "/actuator/health",
+                    "/error"
+                ).permitAll()
+
+                .requestMatchers(HttpMethod.POST,
+                    "/api/users/login", "/api/users/register"
+                ).permitAll()
+
+                .requestMatchers(
+                    "/api/tasks/**"
+                ).authenticated()
+
                 .anyRequest().authenticated()
             )
-            .sessionManagement(session -> session
-                .sessionCreationPolicy(SessionCreationPolicy.STATELESS)
+
+            .exceptionHandling(errors -> errors
+                .authenticationEntryPoint((request, response, ex) -> {
+                    response.setStatus(401);
+                    response.setContentType("application/json");
+                    response.getWriter().write("{\"error\":\"Authentication required. Please log in again.\"}");
+                })
+                .accessDeniedHandler((request, response, ex) -> {
+                    response.setStatus(403);
+                    response.setContentType("application/json");
+                    response.getWriter().write("{\"error\":\"Access denied.\"}");
+                })
             )
+
+            .sessionManagement(session -> session
+                .sessionCreationPolicy(
+                    SessionCreationPolicy.STATELESS
+                )
+            )
+
             .authenticationProvider(authenticationProvider)
-            .addFilterBefore(jwtAuthFilter, UsernamePasswordAuthenticationFilter.class);
-        
+
+            .addFilterBefore(
+                jwtAuthFilter,
+                UsernamePasswordAuthenticationFilter.class
+            );
+
         return http.build();
     }
 }

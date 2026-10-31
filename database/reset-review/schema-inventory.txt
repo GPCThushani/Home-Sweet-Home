@@ -1,0 +1,599 @@
+BEGIN
+   database    | server_address | server_port | server_version 
+---------------+----------------+-------------+----------------
+ homesweethome | ::1            |        5433 | 18.6
+(1 row)
+
+ schema_name | table_name | exact_rows 
+-------------+------------+------------
+ public      | families   |          1
+(1 row)
+
+ schema_name |    table_name     | exact_rows 
+-------------+-------------------+------------
+ public      | family_activities |          0
+(1 row)
+
+ schema_name |    table_name    | exact_rows 
+-------------+------------------+------------
+ public      | family_documents |          0
+(1 row)
+
+ schema_name |   table_name   | exact_rows 
+-------------+----------------+------------
+ public      | family_members |          1
+(1 row)
+
+ schema_name |   table_name    | exact_rows 
+-------------+-----------------+------------
+ public      | family_memories |          0
+(1 row)
+
+ schema_name |   table_name    | exact_rows 
+-------------+-----------------+------------
+ public      | family_profiles |          6
+(1 row)
+
+ schema_name |  table_name   | exact_rows 
+-------------+---------------+------------
+ public      | garden_plants |          0
+(1 row)
+
+ schema_name |         table_name         | exact_rows 
+-------------+----------------------------+------------
+ public      | garden_routine_completions |          0
+(1 row)
+
+ schema_name |   table_name    | exact_rows 
+-------------+-----------------+------------
+ public      | garden_routines |         24
+(1 row)
+
+ schema_name |  table_name  | exact_rows 
+-------------+--------------+------------
+ public      | garden_setup |          3
+(1 row)
+
+ schema_name |  table_name  | exact_rows 
+-------------+--------------+------------
+ public      | global_tasks |          0
+(1 row)
+
+ schema_name |     table_name      | exact_rows 
+-------------+---------------------+------------
+ public      | health_appointments |          0
+(1 row)
+
+ schema_name |    table_name    | exact_rows 
+-------------+------------------+------------
+ public      | health_documents |          0
+(1 row)
+
+ schema_name |   table_name    | exact_rows 
+-------------+-----------------+------------
+ public      | health_profiles |          2
+(1 row)
+
+ schema_name |   table_name   | exact_rows 
+-------------+----------------+------------
+ public      | health_records |          0
+(1 row)
+
+ schema_name |    table_name     | exact_rows 
+-------------+-------------------+------------
+ public      | maintenance_items |          0
+(1 row)
+
+ schema_name |     table_name      | exact_rows 
+-------------+---------------------+------------
+ public      | maintenance_records |          0
+(1 row)
+
+ schema_name |  table_name   | exact_rows 
+-------------+---------------+------------
+ public      | medicine_logs |          0
+(1 row)
+
+ schema_name |     table_name     | exact_rows 
+-------------+--------------------+------------
+ public      | medicine_schedules |          0
+(1 row)
+
+ schema_name | table_name | exact_rows 
+-------------+------------+------------
+ public      | medicines  |          0
+(1 row)
+
+ schema_name |    table_name    | exact_rows 
+-------------+------------------+------------
+ public      | menstrual_cycles |          0
+(1 row)
+
+ schema_name |    table_name     | exact_rows 
+-------------+-------------------+------------
+ public      | menstrual_entries |          0
+(1 row)
+
+ schema_name |    table_name     | exact_rows 
+-------------+-------------------+------------
+ public      | service_providers |          0
+(1 row)
+
+ schema_name |   table_name   | exact_rows 
+-------------+----------------+------------
+ public      | shopping_items |          6
+(1 row)
+
+ schema_name |         table_name          | exact_rows 
+-------------+-----------------------------+------------
+ public      | shopping_section_categories |          0
+(1 row)
+
+ schema_name |    table_name     | exact_rows 
+-------------+-------------------+------------
+ public      | shopping_sections |          0
+(1 row)
+
+ schema_name | table_name | exact_rows 
+-------------+------------+------------
+ public      | users      |          1
+(1 row)
+
+ table_schema |         table_name          | ordinal_position |          column_name           |          data_type          | is_nullable | column_default | is_identity 
+--------------+-----------------------------+------------------+--------------------------------+-----------------------------+-------------+----------------+-------------
+ public       | families                    |                1 | id                             | uuid                        | NO          |                | NO
+ public       | families                    |                2 | admin_email                    | character varying           | NO          |                | NO
+ public       | families                    |                3 | avatar_path                    | character varying           | YES         |                | NO
+ public       | families                    |                4 | created_at                     | timestamp with time zone    | NO          |                | NO
+ public       | families                    |                5 | invite_code                    | character varying           | YES         |                | NO
+ public       | families                    |                6 | member_count                   | integer                     | YES         |                | NO
+ public       | families                    |                7 | motto                          | character varying           | YES         |                | NO
+ public       | families                    |                8 | name                           | character varying           | NO          |                | NO
+ public       | families                    |                9 | timezone                       | character varying           | YES         |                | NO
+ public       | family_activities           |                1 | id                             | bigint                      | NO          |                | YES
+ public       | family_activities           |                2 | created_by                     | character varying           | YES         |                | NO
+ public       | family_activities           |                3 | description                    | character varying           | YES         |                | NO
+ public       | family_activities           |                4 | family_id                      | character varying           | NO          |                | NO
+ public       | family_activities           |                5 | image_url                      | character varying           | YES         |                | NO
+ public       | family_activities           |                6 | scheduled                      | boolean                     | NO          |                | NO
+ public       | family_activities           |                7 | scheduled_date                 | date                        | YES         |                | NO
+ public       | family_activities           |                8 | scheduled_time                 | time without time zone      | YES         |                | NO
+ public       | family_activities           |                9 | title                          | character varying           | NO          |                | NO
+ public       | family_documents            |                1 | id                             | bigint                      | NO          |                | YES
+ public       | family_documents            |                2 | belongs_to                     | character varying           | YES         |                | NO
+ public       | family_documents            |                3 | category                       | character varying           | NO          |                | NO
+ public       | family_documents            |                4 | created_at                     | timestamp without time zone | YES         |                | NO
+ public       | family_documents            |                5 | expiry_date                    | date                        | YES         |                | NO
+ public       | family_documents            |                6 | family_id                      | character varying           | NO          |                | NO
+ public       | family_documents            |                7 | file_url                       | character varying           | YES         |                | NO
+ public       | family_documents            |                8 | issue_date                     | date                        | YES         |                | NO
+ public       | family_documents            |                9 | notes                          | text                        | YES         |                | NO
+ public       | family_documents            |               10 | reminder_enabled               | boolean                     | YES         |                | NO
+ public       | family_documents            |               11 | title                          | character varying           | NO          |                | NO
+ public       | family_documents            |               12 | uploaded_by                    | character varying           | YES         |                | NO
+ public       | family_members              |                1 | id                             | uuid                        | NO          |                | NO
+ public       | family_members              |                2 | joined_at                      | timestamp with time zone    | NO          |                | NO
+ public       | family_members              |                3 | nickname                       | character varying           | YES         |                | NO
+ public       | family_members              |                4 | role                           | character varying           | NO          |                | NO
+ public       | family_members              |                5 | family_id                      | uuid                        | NO          |                | NO
+ public       | family_members              |                6 | user_id                        | uuid                        | NO          |                | NO
+ public       | family_memories             |                1 | id                             | bigint                      | NO          |                | YES
+ public       | family_memories             |                2 | caption                        | text                        | YES         |                | NO
+ public       | family_memories             |                3 | created_at                     | timestamp without time zone | YES         |                | NO
+ public       | family_memories             |                4 | family_id                      | character varying           | NO          |                | NO
+ public       | family_memories             |                5 | image_url                      | character varying           | YES         |                | NO
+ public       | family_memories             |                6 | memory_date                    | date                        | YES         |                | NO
+ public       | family_memories             |                7 | posted_by                      | character varying           | YES         |                | NO
+ public       | family_profiles             |                1 | id                             | uuid                        | NO          |                | NO
+ public       | family_profiles             |                2 | gender                         | character varying           | YES         |                | NO
+ public       | family_profiles             |                3 | invite_preferred               | boolean                     | NO          |                | NO
+ public       | family_profiles             |                4 | name                           | character varying           | NO          |                | NO
+ public       | family_profiles             |                5 | role                           | character varying           | NO          |                | NO
+ public       | family_profiles             |                6 | family_id                      | uuid                        | NO          |                | NO
+ public       | family_profiles             |                7 | user_id                        | uuid                        | YES         |                | NO
+ public       | family_profiles             |                8 | linked_user_email              | character varying           | YES         |                | NO
+ public       | garden_plants               |                1 | id                             | bigint                      | NO          |                | YES
+ public       | garden_plants               |                2 | added_date                     | date                        | YES         |                | NO
+ public       | garden_plants               |                3 | category                       | character varying           | NO          |                | NO
+ public       | garden_plants               |                4 | family_id                      | character varying           | NO          |                | NO
+ public       | garden_plants               |                5 | name                           | character varying           | NO          |                | NO
+ public       | garden_routine_completions  |                1 | id                             | bigint                      | NO          |                | YES
+ public       | garden_routine_completions  |                2 | completed_at                   | timestamp without time zone | NO          |                | NO
+ public       | garden_routine_completions  |                3 | completed_by                   | character varying           | YES         |                | NO
+ public       | garden_routine_completions  |                4 | family_id                      | character varying           | NO          |                | NO
+ public       | garden_routine_completions  |                5 | occurrence_date                | date                        | NO          |                | NO
+ public       | garden_routine_completions  |                6 | routine_id                     | bigint                      | NO          |                | NO
+ public       | garden_routines             |                1 | id                             | bigint                      | NO          |                | YES
+ public       | garden_routines             |                2 | active                         | boolean                     | NO          |                | NO
+ public       | garden_routines             |                3 | day_of_month                   | integer                     | YES         |                | NO
+ public       | garden_routines             |                4 | day_of_week                    | character varying           | YES         |                | NO
+ public       | garden_routines             |                5 | family_id                      | character varying           | NO          |                | NO
+ public       | garden_routines             |                6 | frequency_type                 | character varying           | NO          |                | NO
+ public       | garden_routines             |                7 | interval_days                  | integer                     | YES         |                | NO
+ public       | garden_routines             |                8 | next_due_date                  | date                        | YES         |                | NO
+ public       | garden_routines             |                9 | is_quick_action                | boolean                     | NO          |                | NO
+ public       | garden_routines             |               10 | scheduled_time                 | time without time zone      | YES         |                | NO
+ public       | garden_routines             |               11 | title                          | character varying           | NO          |                | NO
+ public       | garden_setup                |                1 | family_id                      | character varying           | NO          |                | NO
+ public       | garden_setup                |                2 | initialized                    | boolean                     | NO          |                | NO
+ public       | global_tasks                |                1 | id                             | uuid                        | NO          |                | NO
+ public       | global_tasks                |                2 | completed_at                   | timestamp with time zone    | YES         |                | NO
+ public       | global_tasks                |                3 | created_at                     | timestamp with time zone    | NO          |                | NO
+ public       | global_tasks                |                4 | description                    | text                        | YES         |                | NO
+ public       | global_tasks                |                5 | due_date                       | timestamp with time zone    | YES         |                | NO
+ public       | global_tasks                |                6 | origin_module                  | character varying           | NO          |                | NO
+ public       | global_tasks                |                7 | status                         | character varying           | NO          |                | NO
+ public       | global_tasks                |                8 | title                          | character varying           | NO          |                | NO
+ public       | global_tasks                |                9 | assigned_to                    | uuid                        | YES         |                | NO
+ public       | global_tasks                |               10 | completed_by                   | uuid                        | YES         |                | NO
+ public       | global_tasks                |               11 | created_by                     | uuid                        | YES         |                | NO
+ public       | global_tasks                |               12 | family_id                      | uuid                        | NO          |                | NO
+ public       | health_appointments         |                1 | id                             | bigint                      | NO          |                | YES
+ public       | health_appointments         |                2 | accompanying_member_id         | character varying           | YES         |                | NO
+ public       | health_appointments         |                3 | appointment_date_time          | timestamp without time zone | YES         |                | NO
+ public       | health_appointments         |                4 | doctor_name                    | character varying           | YES         |                | NO
+ public       | health_appointments         |                5 | family_id                      | character varying           | NO          |                | NO
+ public       | health_appointments         |                6 | family_member_id               | character varying           | NO          |                | NO
+ public       | health_appointments         |                7 | follow_up_date                 | date                        | YES         |                | NO
+ public       | health_appointments         |                8 | hospital_or_clinic             | character varying           | YES         |                | NO
+ public       | health_appointments         |                9 | notes                          | text                        | YES         |                | NO
+ public       | health_appointments         |               10 | reason                         | character varying           | YES         |                | NO
+ public       | health_appointments         |               11 | specialty                      | character varying           | YES         |                | NO
+ public       | health_appointments         |               12 | status                         | character varying           | YES         |                | NO
+ public       | health_documents            |                1 | id                             | bigint                      | NO          |                | YES
+ public       | health_documents            |                2 | category                       | character varying           | YES         |                | NO
+ public       | health_documents            |                3 | family_id                      | character varying           | NO          |                | NO
+ public       | health_documents            |                4 | family_member_id               | character varying           | NO          |                | NO
+ public       | health_documents            |                5 | file_name                      | character varying           | YES         |                | NO
+ public       | health_documents            |                6 | file_url                       | character varying           | YES         |                | NO
+ public       | health_documents            |                7 | protected_record               | boolean                     | NO          |                | NO
+ public       | health_documents            |                8 | title                          | character varying           | YES         |                | NO
+ public       | health_documents            |                9 | uploaded_date                  | date                        | YES         |                | NO
+ public       | health_profiles             |                1 | id                             | bigint                      | NO          |                | YES
+ public       | health_profiles             |                2 | allergies                      | text                        | YES         |                | NO
+ public       | health_profiles             |                3 | blood_type                     | character varying           | YES         |                | NO
+ public       | health_profiles             |                4 | date_of_birth                  | date                        | YES         |                | NO
+ public       | health_profiles             |                5 | emergency_access_enabled       | boolean                     | NO          |                | NO
+ public       | health_profiles             |                6 | emergency_contact_name         | character varying           | YES         |                | NO
+ public       | health_profiles             |                7 | emergency_contact_phone        | character varying           | YES         |                | NO
+ public       | health_profiles             |                8 | emergency_contact_relationship | character varying           | YES         |                | NO
+ public       | health_profiles             |                9 | family_health_summary_visible  | boolean                     | NO          |                | NO
+ public       | health_profiles             |               10 | family_id                      | character varying           | NO          |                | NO
+ public       | health_profiles             |               11 | family_member_id               | character varying           | NO          |                | NO
+ public       | health_profiles             |               12 | height_cm                      | double precision            | YES         |                | NO
+ public       | health_profiles             |               13 | hospital_or_clinic             | character varying           | YES         |                | NO
+ public       | health_profiles             |               14 | insurance_expiry_date          | date                        | YES         |                | NO
+ public       | health_profiles             |               15 | insurance_policy_number        | character varying           | YES         |                | NO
+ public       | health_profiles             |               16 | insurance_provider             | character varying           | YES         |                | NO
+ public       | health_profiles             |               17 | known_conditions               | text                        | YES         |                | NO
+ public       | health_profiles             |               18 | previous_hospitalizations      | text                        | YES         |                | NO
+ public       | health_profiles             |               19 | previous_surgeries             | text                        | YES         |                | NO
+ public       | health_profiles             |               20 | primary_physician_name         | character varying           | YES         |                | NO
+ public       | health_profiles             |               21 | primary_physician_phone        | character varying           | YES         |                | NO
+ public       | health_profiles             |               22 | special_medical_notes          | text                        | YES         |                | NO
+ public       | health_profiles             |               23 | weight_kg                      | double precision            | YES         |                | NO
+ public       | health_profiles             |               24 | womens_health_enabled          | boolean                     | NO          |                | NO
+ public       | health_records              |                1 | id                             | bigint                      | NO          |                | YES
+ public       | health_records              |                2 | category                       | character varying           | NO          |                | NO
+ public       | health_records              |                3 | details                        | text                        | YES         |                | NO
+ public       | health_records              |                4 | doctor_name                    | character varying           | YES         |                | NO
+ public       | health_records              |                5 | family_id                      | character varying           | NO          |                | NO
+ public       | health_records              |                6 | family_member_id               | character varying           | NO          |                | NO
+ public       | health_records              |                7 | record_date                    | date                        | YES         |                | NO
+ public       | health_records              |                8 | title                          | character varying           | NO          |                | NO
+ public       | maintenance_items           |                1 | id                             | bigint                      | NO          |                | YES
+ public       | maintenance_items           |                2 | active                         | boolean                     | NO          |                | NO
+ public       | maintenance_items           |                3 | category                       | character varying           | NO          |                | NO
+ public       | maintenance_items           |                4 | estimated_usage_days           | integer                     | YES         |                | NO
+ public       | maintenance_items           |                5 | family_id                      | character varying           | NO          |                | NO
+ public       | maintenance_items           |                6 | frequency_type                 | character varying           | NO          |                | NO
+ public       | maintenance_items           |                7 | interval_days                  | integer                     | YES         |                | NO
+ public       | maintenance_items           |                8 | last_serviced_date             | date                        | YES         |                | NO
+ public       | maintenance_items           |                9 | next_due_date                  | date                        | YES         |                | NO
+ public       | maintenance_items           |               10 | provider_id                    | bigint                      | YES         |                | NO
+ public       | maintenance_items           |               11 | title                          | character varying           | NO          |                | NO
+ public       | maintenance_records         |                1 | id                             | bigint                      | NO          |                | YES
+ public       | maintenance_records         |                2 | completed_by                   | character varying           | YES         |                | NO
+ public       | maintenance_records         |                3 | family_id                      | character varying           | NO          |                | NO
+ public       | maintenance_records         |                4 | item_id                        | bigint                      | NO          |                | NO
+ public       | maintenance_records         |                5 | logged_at                      | timestamp without time zone | YES         |                | NO
+ public       | maintenance_records         |                6 | notes                          | character varying           | YES         |                | NO
+ public       | maintenance_records         |                7 | service_date                   | date                        | NO          |                | NO
+ public       | medicine_logs               |                1 | id                             | bigint                      | NO          |                | YES
+ public       | medicine_logs               |                2 | family_id                      | character varying           | NO          |                | NO
+ public       | medicine_logs               |                3 | family_member_id               | character varying           | NO          |                | NO
+ public       | medicine_logs               |                4 | medicine_id                    | bigint                      | NO          |                | NO
+ public       | medicine_logs               |                5 | notes                          | text                        | YES         |                | NO
+ public       | medicine_logs               |                6 | recorded_by_member_id          | character varying           | YES         |                | NO
+ public       | medicine_logs               |                7 | scheduled_at                   | timestamp without time zone | NO          |                | NO
+ public       | medicine_logs               |                8 | status                         | character varying           | NO          |                | NO
+ public       | medicine_logs               |                9 | taken_at                       | timestamp without time zone | YES         |                | NO
+ public       | medicine_schedules          |                1 | id                             | bigint                      | NO          |                | YES
+ public       | medicine_schedules          |                2 | active                         | boolean                     | NO          |                | NO
+ public       | medicine_schedules          |                3 | label                          | character varying           | YES         |                | NO
+ public       | medicine_schedules          |                4 | medicine_id                    | bigint                      | NO          |                | NO
+ public       | medicine_schedules          |                5 | scheduled_time                 | time without time zone      | NO          |                | NO
+ public       | medicines                   |                1 | id                             | bigint                      | NO          |                | YES
+ public       | medicines                   |                2 | active                         | boolean                     | NO          |                | NO
+ public       | medicines                   |                3 | brand_name                     | character varying           | YES         |                | NO
+ public       | medicines                   |                4 | dosage                         | character varying           | YES         |                | NO
+ public       | medicines                   |                5 | end_date                       | date                        | YES         |                | NO
+ public       | medicines                   |                6 | family_id                      | character varying           | NO          |                | NO
+ public       | medicines                   |                7 | family_member_id               | character varying           | NO          |                | NO
+ public       | medicines                   |                8 | frequency                      | character varying           | YES         |                | NO
+ public       | medicines                   |                9 | generic_name                   | character varying           | YES         |                | NO
+ public       | medicines                   |               10 | instructions                   | text                        | YES         |                | NO
+ public       | medicines                   |               11 | name                           | character varying           | NO          |                | NO
+ public       | medicines                   |               12 | quantity                       | integer                     | YES         |                | NO
+ public       | medicines                   |               13 | refill_threshold               | integer                     | YES         |                | NO
+ public       | medicines                   |               14 | remaining_quantity             | integer                     | YES         |                | NO
+ public       | medicines                   |               15 | start_date                     | date                        | YES         |                | NO
+ public       | menstrual_cycles            |                1 | id                             | bigint                      | NO          |                | YES
+ public       | menstrual_cycles            |                2 | cycle_length                   | integer                     | YES         |                | NO
+ public       | menstrual_cycles            |                3 | end_date                       | date                        | YES         |                | NO
+ public       | menstrual_cycles            |                4 | family_id                      | character varying           | NO          |                | NO
+ public       | menstrual_cycles            |                5 | family_member_id               | character varying           | NO          |                | NO
+ public       | menstrual_cycles            |                6 | notes                          | text                        | YES         |                | NO
+ public       | menstrual_cycles            |                7 | period_length                  | integer                     | YES         |                | NO
+ public       | menstrual_cycles            |                8 | start_date                     | date                        | NO          |                | NO
+ public       | menstrual_entries           |                1 | id                             | bigint                      | NO          |                | YES
+ public       | menstrual_entries           |                2 | cycle_id                       | bigint                      | NO          |                | NO
+ public       | menstrual_entries           |                3 | date                           | date                        | NO          |                | NO
+ public       | menstrual_entries           |                4 | family_id                      | character varying           | NO          |                | NO
+ public       | menstrual_entries           |                5 | family_member_id               | character varying           | NO          |                | NO
+ public       | menstrual_entries           |                6 | flow                           | character varying           | YES         |                | NO
+ public       | menstrual_entries           |                7 | mood                           | character varying           | YES         |                | NO
+ public       | menstrual_entries           |                8 | notes                          | text                        | YES         |                | NO
+ public       | menstrual_entries           |                9 | symptoms                       | text                        | YES         |                | NO
+ public       | service_providers           |                1 | id                             | bigint                      | NO          |                | YES
+ public       | service_providers           |                2 | address                        | character varying           | YES         |                | NO
+ public       | service_providers           |                3 | family_id                      | character varying           | NO          |                | NO
+ public       | service_providers           |                4 | notes                          | character varying           | YES         |                | NO
+ public       | service_providers           |                5 | phone_number                   | character varying           | YES         |                | NO
+ public       | service_providers           |                6 | provider_name                  | character varying           | NO          |                | NO
+ public       | shopping_items              |                1 | id                             | bigint                      | NO          |                | YES
+ public       | shopping_items              |                2 | added_date                     | date                        | YES         |                | NO
+ public       | shopping_items              |                3 | archive_batch_id               | character varying           | YES         |                | NO
+ public       | shopping_items              |                4 | archived                       | boolean                     | NO          |                | NO
+ public       | shopping_items              |                5 | archived_at                    | timestamp without time zone | YES         |                | NO
+ public       | shopping_items              |                6 | category                       | character varying           | NO          |                | NO
+ public       | shopping_items              |                7 | completed                      | boolean                     | NO          |                | NO
+ public       | shopping_items              |                8 | family_id                      | character varying           | NO          |                | NO
+ public       | shopping_items              |                9 | name                           | character varying           | NO          |                | NO
+ public       | shopping_items              |               10 | quantity                       | character varying           | YES         |                | NO
+ public       | shopping_items              |               11 | shopping_date                  | date                        | YES         |                | NO
+ public       | shopping_items              |               12 | sub_category                   | character varying           | NO          |                | NO
+ public       | shopping_items              |               13 | variety_notes                  | character varying           | YES         |                | NO
+ public       | shopping_section_categories |                1 | section_id                     | bigint                      | NO          |                | NO
+ public       | shopping_section_categories |                2 | category_name                  | character varying           | YES         |                | NO
+ public       | shopping_sections           |                1 | id                             | bigint                      | NO          |                | YES
+ public       | shopping_sections           |                2 | created_at                     | timestamp without time zone | YES         |                | NO
+ public       | shopping_sections           |                3 | custom_section                 | boolean                     | NO          |                | NO
+ public       | shopping_sections           |                4 | description                    | character varying           | YES         |                | NO
+ public       | shopping_sections           |                5 | family_id                      | character varying           | NO          |                | NO
+ public       | shopping_sections           |                6 | section_key                    | character varying           | NO          |                | NO
+ public       | shopping_sections           |                7 | title                          | character varying           | NO          |                | NO
+ public       | shopping_sections           |                8 | updated_at                     | timestamp without time zone | YES         |                | NO
+ public       | users                       |                1 | id                             | uuid                        | NO          |                | NO
+ public       | users                       |                2 | created_at                     | timestamp with time zone    | NO          |                | NO
+ public       | users                       |                3 | email                          | character varying           | NO          |                | NO
+ public       | users                       |                4 | password_hash                  | character varying           | NO          |                | NO
+ public       | users                       |                5 | updated_at                     | timestamp with time zone    | NO          |                | NO
+(238 rows)
+
+ schema_name |         table_name          |                        conname                         | contype |                                                                                                                                definition                                                                                                                                
+-------------+-----------------------------+--------------------------------------------------------+---------+--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+ public      | families                    | families_admin_email_not_null                          | n       | NOT NULL admin_email
+ public      | families                    | families_created_at_not_null                           | n       | NOT NULL created_at
+ public      | families                    | families_id_not_null                                   | n       | NOT NULL id
+ public      | families                    | families_name_not_null                                 | n       | NOT NULL name
+ public      | families                    | families_pkey                                          | p       | PRIMARY KEY (id)
+ public      | families                    | ukpve49daqjq59t6hrm9lxs29ve                            | u       | UNIQUE (invite_code)
+ public      | family_activities           | family_activities_family_id_not_null                   | n       | NOT NULL family_id
+ public      | family_activities           | family_activities_id_not_null                          | n       | NOT NULL id
+ public      | family_activities           | family_activities_pkey                                 | p       | PRIMARY KEY (id)
+ public      | family_activities           | family_activities_scheduled_not_null                   | n       | NOT NULL scheduled
+ public      | family_activities           | family_activities_title_not_null                       | n       | NOT NULL title
+ public      | family_documents            | family_documents_category_not_null                     | n       | NOT NULL category
+ public      | family_documents            | family_documents_family_id_not_null                    | n       | NOT NULL family_id
+ public      | family_documents            | family_documents_id_not_null                           | n       | NOT NULL id
+ public      | family_documents            | family_documents_pkey                                  | p       | PRIMARY KEY (id)
+ public      | family_documents            | family_documents_title_not_null                        | n       | NOT NULL title
+ public      | family_members              | family_members_family_id_not_null                      | n       | NOT NULL family_id
+ public      | family_members              | family_members_id_not_null                             | n       | NOT NULL id
+ public      | family_members              | family_members_joined_at_not_null                      | n       | NOT NULL joined_at
+ public      | family_members              | family_members_pkey                                    | p       | PRIMARY KEY (id)
+ public      | family_members              | family_members_role_not_null                           | n       | NOT NULL role
+ public      | family_members              | family_members_user_id_not_null                        | n       | NOT NULL user_id
+ public      | family_members              | fkeynpxqr1l03689buyid3e1d8l                            | f       | FOREIGN KEY (family_id) REFERENCES families(id)
+ public      | family_members              | fkmdci0l8jglw0mya47m16lnutn                            | f       | FOREIGN KEY (user_id) REFERENCES users(id)
+ public      | family_members              | ukgkutqi0x1x6tk3umvb3je4ohv                            | u       | UNIQUE (user_id, family_id)
+ public      | family_memories             | family_memories_family_id_not_null                     | n       | NOT NULL family_id
+ public      | family_memories             | family_memories_id_not_null                            | n       | NOT NULL id
+ public      | family_memories             | family_memories_pkey                                   | p       | PRIMARY KEY (id)
+ public      | family_profiles             | family_profiles_family_id_not_null                     | n       | NOT NULL family_id
+ public      | family_profiles             | family_profiles_id_not_null                            | n       | NOT NULL id
+ public      | family_profiles             | family_profiles_invite_preferred_not_null              | n       | NOT NULL invite_preferred
+ public      | family_profiles             | family_profiles_name_not_null                          | n       | NOT NULL name
+ public      | family_profiles             | family_profiles_pkey                                   | p       | PRIMARY KEY (id)
+ public      | family_profiles             | family_profiles_role_not_null                          | n       | NOT NULL role
+ public      | family_profiles             | fk526aea6o6nk5c7yos6ox3rqfq                            | f       | FOREIGN KEY (family_id) REFERENCES families(id)
+ public      | family_profiles             | fkc00502uoy6l1j0thqxr3mk7c3                            | f       | FOREIGN KEY (user_id) REFERENCES users(id)
+ public      | garden_plants               | garden_plants_category_not_null                        | n       | NOT NULL category
+ public      | garden_plants               | garden_plants_family_id_not_null                       | n       | NOT NULL family_id
+ public      | garden_plants               | garden_plants_id_not_null                              | n       | NOT NULL id
+ public      | garden_plants               | garden_plants_name_not_null                            | n       | NOT NULL name
+ public      | garden_plants               | garden_plants_pkey                                     | p       | PRIMARY KEY (id)
+ public      | garden_routine_completions  | garden_routine_completions_completed_at_not_null       | n       | NOT NULL completed_at
+ public      | garden_routine_completions  | garden_routine_completions_family_id_not_null          | n       | NOT NULL family_id
+ public      | garden_routine_completions  | garden_routine_completions_id_not_null                 | n       | NOT NULL id
+ public      | garden_routine_completions  | garden_routine_completions_occurrence_date_not_null    | n       | NOT NULL occurrence_date
+ public      | garden_routine_completions  | garden_routine_completions_pkey                        | p       | PRIMARY KEY (id)
+ public      | garden_routine_completions  | garden_routine_completions_routine_id_not_null         | n       | NOT NULL routine_id
+ public      | garden_routine_completions  | uq_garden_completion                                   | u       | UNIQUE (routine_id, occurrence_date)
+ public      | garden_routines             | garden_routines_active_not_null                        | n       | NOT NULL active
+ public      | garden_routines             | garden_routines_day_of_week_check                      | c       | CHECK (((day_of_week)::text = ANY ((ARRAY['MONDAY'::character varying, 'TUESDAY'::character varying, 'WEDNESDAY'::character varying, 'THURSDAY'::character varying, 'FRIDAY'::character varying, 'SATURDAY'::character varying, 'SUNDAY'::character varying])::text[])))
+ public      | garden_routines             | garden_routines_family_id_not_null                     | n       | NOT NULL family_id
+ public      | garden_routines             | garden_routines_frequency_type_not_null                | n       | NOT NULL frequency_type
+ public      | garden_routines             | garden_routines_id_not_null                            | n       | NOT NULL id
+ public      | garden_routines             | garden_routines_is_quick_action_not_null               | n       | NOT NULL is_quick_action
+ public      | garden_routines             | garden_routines_pkey                                   | p       | PRIMARY KEY (id)
+ public      | garden_routines             | garden_routines_title_not_null                         | n       | NOT NULL title
+ public      | garden_setup                | garden_setup_family_id_not_null                        | n       | NOT NULL family_id
+ public      | garden_setup                | garden_setup_initialized_not_null                      | n       | NOT NULL initialized
+ public      | garden_setup                | garden_setup_pkey                                      | p       | PRIMARY KEY (family_id)
+ public      | global_tasks                | fkk2dgj4tqhbudd6mf5slkiujun                            | f       | FOREIGN KEY (assigned_to) REFERENCES family_members(id)
+ public      | global_tasks                | fklcryvv0gj15b3pbvax1w8g5q                             | f       | FOREIGN KEY (created_by) REFERENCES family_members(id)
+ public      | global_tasks                | fknamfkyy1gh86kdf8f4p669ocs                            | f       | FOREIGN KEY (completed_by) REFERENCES family_members(id)
+ public      | global_tasks                | fkseuvf867q4oh9h6tsig4tjcms                            | f       | FOREIGN KEY (family_id) REFERENCES families(id)
+ public      | global_tasks                | global_tasks_created_at_not_null                       | n       | NOT NULL created_at
+ public      | global_tasks                | global_tasks_family_id_not_null                        | n       | NOT NULL family_id
+ public      | global_tasks                | global_tasks_id_not_null                               | n       | NOT NULL id
+ public      | global_tasks                | global_tasks_origin_module_not_null                    | n       | NOT NULL origin_module
+ public      | global_tasks                | global_tasks_pkey                                      | p       | PRIMARY KEY (id)
+ public      | global_tasks                | global_tasks_status_not_null                           | n       | NOT NULL status
+ public      | global_tasks                | global_tasks_title_not_null                            | n       | NOT NULL title
+ public      | health_appointments         | health_appointments_family_id_not_null                 | n       | NOT NULL family_id
+ public      | health_appointments         | health_appointments_family_member_id_not_null          | n       | NOT NULL family_member_id
+ public      | health_appointments         | health_appointments_id_not_null                        | n       | NOT NULL id
+ public      | health_appointments         | health_appointments_pkey                               | p       | PRIMARY KEY (id)
+ public      | health_documents            | health_documents_family_id_not_null                    | n       | NOT NULL family_id
+ public      | health_documents            | health_documents_family_member_id_not_null             | n       | NOT NULL family_member_id
+ public      | health_documents            | health_documents_id_not_null                           | n       | NOT NULL id
+ public      | health_documents            | health_documents_pkey                                  | p       | PRIMARY KEY (id)
+ public      | health_documents            | health_documents_protected_record_not_null             | n       | NOT NULL protected_record
+ public      | health_profiles             | health_profiles_emergency_access_enabled_not_null      | n       | NOT NULL emergency_access_enabled
+ public      | health_profiles             | health_profiles_family_health_summary_visible_not_null | n       | NOT NULL family_health_summary_visible
+ public      | health_profiles             | health_profiles_family_id_not_null                     | n       | NOT NULL family_id
+ public      | health_profiles             | health_profiles_family_member_id_not_null              | n       | NOT NULL family_member_id
+ public      | health_profiles             | health_profiles_id_not_null                            | n       | NOT NULL id
+ public      | health_profiles             | health_profiles_pkey                                   | p       | PRIMARY KEY (id)
+ public      | health_profiles             | health_profiles_womens_health_enabled_not_null         | n       | NOT NULL womens_health_enabled
+ public      | health_profiles             | uk_health_family_member                                | u       | UNIQUE (family_id, family_member_id)
+ public      | health_records              | health_records_category_not_null                       | n       | NOT NULL category
+ public      | health_records              | health_records_family_id_not_null                      | n       | NOT NULL family_id
+ public      | health_records              | health_records_family_member_id_not_null               | n       | NOT NULL family_member_id
+ public      | health_records              | health_records_id_not_null                             | n       | NOT NULL id
+ public      | health_records              | health_records_pkey                                    | p       | PRIMARY KEY (id)
+ public      | health_records              | health_records_title_not_null                          | n       | NOT NULL title
+ public      | maintenance_items           | maintenance_items_active_not_null                      | n       | NOT NULL active
+ public      | maintenance_items           | maintenance_items_category_not_null                    | n       | NOT NULL category
+ public      | maintenance_items           | maintenance_items_family_id_not_null                   | n       | NOT NULL family_id
+ public      | maintenance_items           | maintenance_items_frequency_type_not_null              | n       | NOT NULL frequency_type
+ public      | maintenance_items           | maintenance_items_id_not_null                          | n       | NOT NULL id
+ public      | maintenance_items           | maintenance_items_pkey                                 | p       | PRIMARY KEY (id)
+ public      | maintenance_items           | maintenance_items_title_not_null                       | n       | NOT NULL title
+ public      | maintenance_records         | maintenance_records_family_id_not_null                 | n       | NOT NULL family_id
+ public      | maintenance_records         | maintenance_records_id_not_null                        | n       | NOT NULL id
+ public      | maintenance_records         | maintenance_records_item_id_not_null                   | n       | NOT NULL item_id
+ public      | maintenance_records         | maintenance_records_pkey                               | p       | PRIMARY KEY (id)
+ public      | maintenance_records         | maintenance_records_service_date_not_null              | n       | NOT NULL service_date
+ public      | medicine_logs               | medicine_logs_family_id_not_null                       | n       | NOT NULL family_id
+ public      | medicine_logs               | medicine_logs_family_member_id_not_null                | n       | NOT NULL family_member_id
+ public      | medicine_logs               | medicine_logs_id_not_null                              | n       | NOT NULL id
+ public      | medicine_logs               | medicine_logs_medicine_id_not_null                     | n       | NOT NULL medicine_id
+ public      | medicine_logs               | medicine_logs_pkey                                     | p       | PRIMARY KEY (id)
+ public      | medicine_logs               | medicine_logs_scheduled_at_not_null                    | n       | NOT NULL scheduled_at
+ public      | medicine_logs               | medicine_logs_status_not_null                          | n       | NOT NULL status
+ public      | medicine_schedules          | medicine_schedules_active_not_null                     | n       | NOT NULL active
+ public      | medicine_schedules          | medicine_schedules_id_not_null                         | n       | NOT NULL id
+ public      | medicine_schedules          | medicine_schedules_medicine_id_not_null                | n       | NOT NULL medicine_id
+ public      | medicine_schedules          | medicine_schedules_pkey                                | p       | PRIMARY KEY (id)
+ public      | medicine_schedules          | medicine_schedules_scheduled_time_not_null             | n       | NOT NULL scheduled_time
+ public      | medicines                   | medicines_active_not_null                              | n       | NOT NULL active
+ public      | medicines                   | medicines_family_id_not_null                           | n       | NOT NULL family_id
+ public      | medicines                   | medicines_family_member_id_not_null                    | n       | NOT NULL family_member_id
+ public      | medicines                   | medicines_id_not_null                                  | n       | NOT NULL id
+ public      | medicines                   | medicines_name_not_null                                | n       | NOT NULL name
+ public      | medicines                   | medicines_pkey                                         | p       | PRIMARY KEY (id)
+ public      | menstrual_cycles            | menstrual_cycles_family_id_not_null                    | n       | NOT NULL family_id
+ public      | menstrual_cycles            | menstrual_cycles_family_member_id_not_null             | n       | NOT NULL family_member_id
+ public      | menstrual_cycles            | menstrual_cycles_id_not_null                           | n       | NOT NULL id
+ public      | menstrual_cycles            | menstrual_cycles_pkey                                  | p       | PRIMARY KEY (id)
+ public      | menstrual_cycles            | menstrual_cycles_start_date_not_null                   | n       | NOT NULL start_date
+ public      | menstrual_entries           | menstrual_entries_cycle_id_not_null                    | n       | NOT NULL cycle_id
+ public      | menstrual_entries           | menstrual_entries_date_not_null                        | n       | NOT NULL date
+ public      | menstrual_entries           | menstrual_entries_family_id_not_null                   | n       | NOT NULL family_id
+ public      | menstrual_entries           | menstrual_entries_family_member_id_not_null            | n       | NOT NULL family_member_id
+ public      | menstrual_entries           | menstrual_entries_id_not_null                          | n       | NOT NULL id
+ public      | menstrual_entries           | menstrual_entries_pkey                                 | p       | PRIMARY KEY (id)
+ public      | service_providers           | service_providers_family_id_not_null                   | n       | NOT NULL family_id
+ public      | service_providers           | service_providers_id_not_null                          | n       | NOT NULL id
+ public      | service_providers           | service_providers_pkey                                 | p       | PRIMARY KEY (id)
+ public      | service_providers           | service_providers_provider_name_not_null               | n       | NOT NULL provider_name
+ public      | shopping_items              | shopping_items_archived_not_null                       | n       | NOT NULL archived
+ public      | shopping_items              | shopping_items_category_not_null                       | n       | NOT NULL category
+ public      | shopping_items              | shopping_items_completed_not_null                      | n       | NOT NULL completed
+ public      | shopping_items              | shopping_items_family_id_not_null                      | n       | NOT NULL family_id
+ public      | shopping_items              | shopping_items_id_not_null                             | n       | NOT NULL id
+ public      | shopping_items              | shopping_items_name_not_null                           | n       | NOT NULL name
+ public      | shopping_items              | shopping_items_pkey                                    | p       | PRIMARY KEY (id)
+ public      | shopping_items              | shopping_items_sub_category_not_null                   | n       | NOT NULL sub_category
+ public      | shopping_section_categories | fksaaof900aw3r5602b2u2kg8fr                            | f       | FOREIGN KEY (section_id) REFERENCES shopping_sections(id)
+ public      | shopping_section_categories | shopping_section_categories_section_id_not_null        | n       | NOT NULL section_id
+ public      | shopping_sections           | shopping_sections_custom_section_not_null              | n       | NOT NULL custom_section
+ public      | shopping_sections           | shopping_sections_family_id_not_null                   | n       | NOT NULL family_id
+ public      | shopping_sections           | shopping_sections_id_not_null                          | n       | NOT NULL id
+ public      | shopping_sections           | shopping_sections_pkey                                 | p       | PRIMARY KEY (id)
+ public      | shopping_sections           | shopping_sections_section_key_not_null                 | n       | NOT NULL section_key
+ public      | shopping_sections           | shopping_sections_title_not_null                       | n       | NOT NULL title
+ public      | users                       | uk6dotkott2kjsp8vw4d0m25fb7                            | u       | UNIQUE (email)
+ public      | users                       | users_created_at_not_null                              | n       | NOT NULL created_at
+ public      | users                       | users_email_not_null                                   | n       | NOT NULL email
+ public      | users                       | users_id_not_null                                      | n       | NOT NULL id
+ public      | users                       | users_password_hash_not_null                           | n       | NOT NULL password_hash
+ public      | users                       | users_pkey                                             | p       | PRIMARY KEY (id)
+ public      | users                       | users_updated_at_not_null                              | n       | NOT NULL updated_at
+(161 rows)
+
+ schemaname |           sequencename            | data_type | start_value | min_value |      max_value      | increment_by | cycle | last_value 
+------------+-----------------------------------+-----------+-------------+-----------+---------------------+--------------+-------+------------
+ public     | family_activities_id_seq          | bigint    |           1 |         1 | 9223372036854775807 |            1 | f     |           
+ public     | family_documents_id_seq           | bigint    |           1 |         1 | 9223372036854775807 |            1 | f     |           
+ public     | family_memories_id_seq            | bigint    |           1 |         1 | 9223372036854775807 |            1 | f     |           
+ public     | garden_plants_id_seq              | bigint    |           1 |         1 | 9223372036854775807 |            1 | f     |           
+ public     | garden_routine_completions_id_seq | bigint    |           1 |         1 | 9223372036854775807 |            1 | f     |           
+ public     | garden_routines_id_seq            | bigint    |           1 |         1 | 9223372036854775807 |            1 | f     |         24
+ public     | health_appointments_id_seq        | bigint    |           1 |         1 | 9223372036854775807 |            1 | f     |           
+ public     | health_documents_id_seq           | bigint    |           1 |         1 | 9223372036854775807 |            1 | f     |           
+ public     | health_profiles_id_seq            | bigint    |           1 |         1 | 9223372036854775807 |            1 | f     |          2
+ public     | health_records_id_seq             | bigint    |           1 |         1 | 9223372036854775807 |            1 | f     |           
+ public     | maintenance_items_id_seq          | bigint    |           1 |         1 | 9223372036854775807 |            1 | f     |           
+ public     | maintenance_records_id_seq        | bigint    |           1 |         1 | 9223372036854775807 |            1 | f     |           
+ public     | medicine_logs_id_seq              | bigint    |           1 |         1 | 9223372036854775807 |            1 | f     |           
+ public     | medicine_schedules_id_seq         | bigint    |           1 |         1 | 9223372036854775807 |            1 | f     |           
+ public     | medicines_id_seq                  | bigint    |           1 |         1 | 9223372036854775807 |            1 | f     |           
+ public     | menstrual_cycles_id_seq           | bigint    |           1 |         1 | 9223372036854775807 |            1 | f     |           
+ public     | menstrual_entries_id_seq          | bigint    |           1 |         1 | 9223372036854775807 |            1 | f     |           
+ public     | service_providers_id_seq          | bigint    |           1 |         1 | 9223372036854775807 |            1 | f     |           
+ public     | shopping_items_id_seq             | bigint    |           1 |         1 | 9223372036854775807 |            1 | f     |          6
+ public     | shopping_sections_id_seq          | bigint    |           1 |         1 | 9223372036854775807 |            1 | f     |           
+(20 rows)
+
+ schema_name | table_name | tgname | definition 
+-------------+------------+--------+------------
+(0 rows)
+
+ schemaname | tablename | policyname | cmd 
+------------+-----------+------------+-----
+(0 rows)
+
+ schema_name | object_name | relkind 
+-------------+-------------+---------
+(0 rows)
+
+ extname | extversion 
+---------+------------
+ plpgsql | 1.0
+(1 row)
+
+ large_object_count 
+--------------------
+                  0
+(1 row)
+
+ application_name | state | connections 
+------------------+-------+-------------
+(0 rows)
+
+COMMIT

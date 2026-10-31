@@ -1,13 +1,30 @@
+import 'package:flutter/foundation.dart';
+
 class ApiConfig {
-  // Android Studio Emulator
-  static const String baseUrl =
-      'http://localhost:8080/api';
+  static final String baseUrl = resolve(
+    override: const String.fromEnvironment('API_BASE_URL'),
+    platform: kIsWeb ? 'web' : defaultTargetPlatform.name,
+  );
+  static String get origin => Uri.parse(baseUrl).origin;
 
-  // For a physical phone, use your computer's LAN IP:
-  // static const String baseUrl =
-  //     'http://192.168.1.100:8080/api';
-
-  // For Flutter Web:
-  // static const String baseUrl =
-  //     'http://localhost:8080/api';
+  static String resolve({String override = '', required String platform}) {
+    final value =
+        (override.isNotEmpty
+                ? override
+                : 'http://${platform == 'android' ? '10.0.2.2' : 'localhost'}:8080/api')
+            .replaceAll(RegExp(r'/+$'), '');
+    final uri = Uri.tryParse(value);
+    if (uri == null ||
+        !['http', 'https'].contains(uri.scheme) ||
+        uri.host.isEmpty ||
+        uri.userInfo.isNotEmpty ||
+        uri.hasQuery ||
+        uri.hasFragment ||
+        !uri.path.endsWith('/api')) {
+      throw ArgumentError(
+        'API_BASE_URL must be an HTTP(S) URL ending in /api.',
+      );
+    }
+    return value;
+  }
 }

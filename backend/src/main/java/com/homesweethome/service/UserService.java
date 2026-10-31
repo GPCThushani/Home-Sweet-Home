@@ -8,6 +8,8 @@ import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
+import org.springframework.web.server.ResponseStatusException;
+import org.springframework.http.HttpStatus;
 
 import java.util.Optional;
 
@@ -23,7 +25,7 @@ public class UserService {
     public AuthenticationResponse registerUser(String email, String rawPassword) {
         Optional<User> existingUser = userRepository.findByEmail(email);
         if (existingUser.isPresent()) {
-            throw new IllegalArgumentException("A user with this email already exists.");
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "An account already exists.");
         }
 
         User newUser = User.builder()

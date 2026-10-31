@@ -1,7 +1,10 @@
+import 'package:mobile/core/services/api_client.dart';
+import 'package:mobile/features/family/models/family_profile.dart';
+import 'package:flutter/foundation.dart';
+import 'package:mobile/core/services/api_config.dart';
 import 'dart:convert';
 import 'dart:io';
 import 'package:flutter/material.dart';
-import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 import 'create_or_join_family_screen.dart';
 import 'join_family_bottom_sheet.dart';
@@ -21,13 +24,15 @@ class FamilyModel {
   });
 
   factory FamilyModel.fromJson(Map<String, dynamic> json) {
-    return FamilyModel(
-      id: json['id'].toString(),
-      name: json['name'] ?? 'The Family',
-      memberCount: json['memberCount'] ?? 1,
-      avatarPath: json['avatarPath'] ?? json['customAvatarPath'] ?? json['avatar_path'],
-    );
+    final name = json['name'];
+    final count = json['memberCount'];
+    if (name is! String || name.trim().isEmpty || count is! int || count < 0) {
+      throw const FormatException('The server returned incomplete family information');
+    }
+    return FamilyModel(id: FamilyProfile.uuid(json['id']), name: name, memberCount: count,
+      avatarPath: json['avatarPath'] ?? json['customAvatarPath'] ?? json['avatar_path']);
   }
+
 }
 
 class ChooseFamilyScreen extends StatefulWidget {
@@ -41,6 +46,14 @@ class ChooseFamilyScreen extends StatefulWidget {
 
 class _ChooseFamilyScreenState extends State<ChooseFamilyScreen> {
   bool _isLoading = true;
+  String? _error;
+  final ApiClient _client = ApiClient();
+  @override
+  void dispose() {
+    _client.close();
+    super.dispose();
+  }
+
   List<FamilyModel> _families = [];
 
   @override
@@ -50,21 +63,21 @@ class _ChooseFamilyScreenState extends State<ChooseFamilyScreen> {
   }
 
   Future<void> _fetchUserFamilies() async {
+    setState(() {
+      _isLoading = true;
+      _error = null;
+    });
     try {
-      final prefs = await SharedPreferences.getInstance();
-      final jwtToken = prefs.getString('jwt_token');
-
-      final url = Uri.parse('http://localhost:8080/api/families/user?email=${widget.userEmail}');
-      final response = await http.get(
-        url,
-        headers: {
-          'Content-Type': 'application/json',
-          if (jwtToken != null) 'Authorization': 'Bearer $jwtToken',
-        },
+      final response = await _client.get(
+        Uri.parse(
+          '${ApiConfig.baseUrl}/families/user',
+        ).replace(queryParameters: {'email': widget.userEmail}),
       );
 
+      if (!mounted) return;
       if (response.statusCode == 200) {
-        final List<dynamic> data = jsonDecode(response.body);
+        final data = jsonDecode(response.body);
+        if (data is! List) throw const FormatException('Invalid family list response');
         setState(() {
           _families = data.map((json) => FamilyModel.fromJson(json)).toList();
           _isLoading = false;
@@ -76,15 +89,18 @@ class _ChooseFamilyScreenState extends State<ChooseFamilyScreen> {
         });
       }
     } catch (e) {
-      debugPrint("Error fetching user families: $e");
+      if (!mounted) return;
       setState(() {
-        _families = [];
+        _error = e.toString();
         _isLoading = false;
       });
     }
   }
 
-  void _selectFamily(FamilyModel family) {
+  Future<void> _selectFamily(FamilyModel family) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString('current_family_id', family.id);
+    if (!mounted) return;
     Navigator.pushAndRemoveUntil(
       context,
       MaterialPageRoute(
@@ -106,7 +122,7 @@ class _ChooseFamilyScreenState extends State<ChooseFamilyScreen> {
       );
     }
 
-    if (path.startsWith('/') || path.startsWith('file://')) {
+    if (!kIsWeb && (path.startsWith('/') || path.startsWith('file://'))) {
       final cleanPath = path.replaceFirst('file://', '');
       return ClipOval(
         child: Image.file(
@@ -114,8 +130,11 @@ class _ChooseFamilyScreenState extends State<ChooseFamilyScreen> {
           width: 58,
           height: 58,
           fit: BoxFit.cover,
-          errorBuilder: (context, error, stackTrace) =>
-              const Icon(Icons.family_restroom_rounded, color: Color(0xFF4A8B71), size: 28),
+          errorBuilder: (context, error, stackTrace) => const Icon(
+            Icons.family_restroom_rounded,
+            color: Color(0xFF4A8B71),
+            size: 28,
+          ),
         ),
       );
     }
@@ -127,8 +146,11 @@ class _ChooseFamilyScreenState extends State<ChooseFamilyScreen> {
           width: 58,
           height: 58,
           fit: BoxFit.cover,
-          errorBuilder: (context, error, stackTrace) =>
-              const Icon(Icons.family_restroom_rounded, color: Color(0xFF4A8B71), size: 28),
+          errorBuilder: (context, error, stackTrace) => const Icon(
+            Icons.family_restroom_rounded,
+            color: Color(0xFF4A8B71),
+            size: 28,
+          ),
         ),
       );
     }
@@ -177,130 +199,168 @@ class _ChooseFamilyScreenState extends State<ChooseFamilyScreen> {
               Expanded(
                 child: _isLoading
                     ? const Center(
-                        child: CircularProgressIndicator(color: Color(0xFF4A8B71)),
+                        child: CircularProgressIndicator(
+                          color: Color(0xFF4A8B71),
+                        ),
+                      )
+                    : _error != null
+                    ? Center(
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Text(_error!, textAlign: TextAlign.center),
+                            TextButton(
+                              onPressed: _fetchUserFamilies,
+                              child: const Text('Retry'),
+                            ),
+                          ],
+                        ),
                       )
                     : _families.isEmpty
-                        ? Center(
-                            child: Column(
-                              mainAxisAlignment: MainAxisAlignment.center,
-                              children: [
-                                Container(
-                                  padding: const EdgeInsets.all(24),
-                                  decoration: const BoxDecoration(
-                                    color: Color(0xFFE8F2ED),
-                                    shape: BoxShape.circle,
-                                  ),
-                                  child: const Icon(Icons.group_off_rounded, size: 48, color: Color(0xFF4A8B71)),
-                                ),
-                                const SizedBox(height: 20),
-                                const Text(
-                                  'No families found',
-                                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Color(0xFF244032)),
-                                ),
-                                const SizedBox(height: 8),
-                                Text(
-                                  'Tap below to create or join your first family space.',
-                                  style: TextStyle(fontSize: 14, color: Colors.grey.shade500),
-                                  textAlign: TextAlign.center,
+                    ? Center(
+                        child: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Container(
+                              padding: const EdgeInsets.all(24),
+                              decoration: const BoxDecoration(
+                                color: Color(0xFFE8F2ED),
+                                shape: BoxShape.circle,
+                              ),
+                              child: const Icon(
+                                Icons.group_off_rounded,
+                                size: 48,
+                                color: Color(0xFF4A8B71),
+                              ),
+                            ),
+                            const SizedBox(height: 20),
+                            const Text(
+                              'No families found',
+                              style: TextStyle(
+                                fontSize: 18,
+                                fontWeight: FontWeight.bold,
+                                color: Color(0xFF244032),
+                              ),
+                            ),
+                            const SizedBox(height: 8),
+                            Text(
+                              'Tap below to create or join your first family space.',
+                              style: TextStyle(
+                                fontSize: 14,
+                                color: Colors.grey.shade500,
+                              ),
+                              textAlign: TextAlign.center,
+                            ),
+                          ],
+                        ),
+                      )
+                    : ListView.builder(
+                        itemCount: _families.length,
+                        itemBuilder: (context, index) {
+                          final family = _families[index];
+                          return Container(
+                            margin: const EdgeInsets.only(bottom: 16),
+                            decoration: BoxDecoration(
+                              color: Colors.white,
+                              borderRadius: BorderRadius.circular(20),
+                              border: Border.all(
+                                color: const Color(0xFFD0E0D8),
+                                width: 1.5,
+                              ),
+                              boxShadow: [
+                                BoxShadow(
+                                  color: const Color(
+                                    0xFF4A8B71,
+                                  ).withValues(alpha: 0.06),
+                                  blurRadius: 14,
+                                  offset: const Offset(0, 6),
                                 ),
                               ],
                             ),
-                          )
-                        : ListView.builder(
-                            itemCount: _families.length,
-                            itemBuilder: (context, index) {
-                              final family = _families[index];
-                              return Container(
-                                margin: const EdgeInsets.only(bottom: 16),
-                                decoration: BoxDecoration(
-                                  color: Colors.white,
-                                  borderRadius: BorderRadius.circular(20),
-                                  border: Border.all(
-                                    color: const Color(0xFFD0E0D8),
-                                    width: 1.5,
+                            child: Material(
+                              color: Colors.transparent,
+                              borderRadius: BorderRadius.circular(20),
+                              child: InkWell(
+                                borderRadius: BorderRadius.circular(20),
+                                onTap: () => _selectFamily(family),
+                                child: Padding(
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 20,
+                                    vertical: 16,
                                   ),
-                                  boxShadow: [
-                                    BoxShadow(
-                                      color: const Color(0xFF4A8B71).withValues(alpha: 0.06),
-                                      blurRadius: 14,
-                                      offset: const Offset(0, 6),
-                                    ),
-                                  ],
-                                ),
-                                child: Material(
-                                  color: Colors.transparent,
-                                  borderRadius: BorderRadius.circular(20),
-                                  child: InkWell(
-                                    borderRadius: BorderRadius.circular(20),
-                                    onTap: () => _selectFamily(family),
-                                    child: Padding(
-                                      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
-                                      child: Row(
-                                        children: [
-                                          Container(
-                                            width: 58,
-                                            height: 58,
-                                            decoration: BoxDecoration(
-                                              shape: BoxShape.circle,
-                                              color: const Color(0xFFE8F2ED),
-                                              border: Border.all(
-                                                color: const Color(0xFF4A8B71),
-                                                width: 2,
+                                  child: Row(
+                                    children: [
+                                      Container(
+                                        width: 58,
+                                        height: 58,
+                                        decoration: BoxDecoration(
+                                          shape: BoxShape.circle,
+                                          color: const Color(0xFFE8F2ED),
+                                          border: Border.all(
+                                            color: const Color(0xFF4A8B71),
+                                            width: 2,
+                                          ),
+                                        ),
+                                        child: _buildFamilyAvatar(
+                                          family.avatarPath,
+                                        ),
+                                      ),
+                                      const SizedBox(width: 16),
+                                      Expanded(
+                                        child: Column(
+                                          crossAxisAlignment:
+                                              CrossAxisAlignment.start,
+                                          children: [
+                                            Text(
+                                              family.name,
+                                              style: const TextStyle(
+                                                fontSize: 18,
+                                                fontWeight: FontWeight.bold,
+                                                color: Color(0xFF244032),
                                               ),
                                             ),
-                                            child: _buildFamilyAvatar(family.avatarPath),
-                                          ),
-                                          const SizedBox(width: 16),
-                                          Expanded(
-                                            child: Column(
-                                              crossAxisAlignment: CrossAxisAlignment.start,
+                                            const SizedBox(height: 4),
+                                            Row(
                                               children: [
-                                                Text(
-                                                  family.name,
-                                                  style: const TextStyle(
-                                                    fontSize: 18,
-                                                    fontWeight: FontWeight.bold,
-                                                    color: Color(0xFF244032),
-                                                  ),
+                                                const Icon(
+                                                  Icons.people_rounded,
+                                                  size: 14,
+                                                  color: Color(0xFF4A8B71),
                                                 ),
-                                                const SizedBox(height: 4),
-                                                Row(
-                                                  children: [
-                                                    const Icon(Icons.people_rounded, size: 14, color: Color(0xFF4A8B71)),
-                                                    const SizedBox(width: 6),
-                                                    Text(
-                                                      '${family.memberCount} ${family.memberCount == 1 ? 'member' : 'members'}',
-                                                      style: TextStyle(
-                                                        fontSize: 13,
-                                                        color: Colors.grey.shade600,
-                                                        fontWeight: FontWeight.w600,
-                                                      ),
-                                                    ),
-                                                  ],
+                                                const SizedBox(width: 6),
+                                                Text(
+                                                  '${family.memberCount} ${family.memberCount == 1 ? 'member' : 'members'}',
+                                                  style: TextStyle(
+                                                    fontSize: 13,
+                                                    color: Colors.grey.shade600,
+                                                    fontWeight: FontWeight.w600,
+                                                  ),
                                                 ),
                                               ],
                                             ),
-                                          ),
-                                          Container(
-                                            padding: const EdgeInsets.all(10),
-                                            decoration: const BoxDecoration(
-                                              color: Color(0xFFE8F2ED),
-                                              shape: BoxShape.circle,
-                                            ),
-                                            child: const Icon(
-                                              Icons.arrow_forward_ios_rounded,
-                                              size: 14,
-                                              color: Color(0xFF4A8B71),
-                                            ),
-                                          ),
-                                        ],
+                                          ],
+                                        ),
                                       ),
-                                    ),
+                                      Container(
+                                        padding: const EdgeInsets.all(10),
+                                        decoration: const BoxDecoration(
+                                          color: Color(0xFFE8F2ED),
+                                          shape: BoxShape.circle,
+                                        ),
+                                        child: const Icon(
+                                          Icons.arrow_forward_ios_rounded,
+                                          size: 14,
+                                          color: Color(0xFF4A8B71),
+                                        ),
+                                      ),
+                                    ],
                                   ),
                                 ),
-                              );
-                            },
-                          ),
+                              ),
+                            ),
+                          );
+                        },
+                      ),
               ),
               const SizedBox(height: 16),
               OutlinedButton.icon(
@@ -308,13 +368,16 @@ class _ChooseFamilyScreenState extends State<ChooseFamilyScreen> {
                   Navigator.push(
                     context,
                     MaterialPageRoute(
-                      builder: (context) => CreateOrJoinFamilyScreen(
-                        userEmail: widget.userEmail,
-                      ),
+                      builder: (context) =>
+                          CreateOrJoinFamilyScreen(userEmail: widget.userEmail),
                     ),
                   );
                 },
-                icon: const Icon(Icons.add_rounded, color: Color(0xFF4A8B71), size: 22),
+                icon: const Icon(
+                  Icons.add_rounded,
+                  color: Color(0xFF4A8B71),
+                  size: 22,
+                ),
                 label: const Text(
                   'Create a family space',
                   style: TextStyle(
@@ -327,7 +390,9 @@ class _ChooseFamilyScreenState extends State<ChooseFamilyScreen> {
                   backgroundColor: Colors.white,
                   minimumSize: const Size(double.infinity, 56),
                   side: const BorderSide(color: Color(0xFF4A8B71), width: 1.5),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(16),
+                  ),
                 ),
               ),
               const SizedBox(height: 12),
@@ -338,12 +403,19 @@ class _ChooseFamilyScreenState extends State<ChooseFamilyScreen> {
                     isScrollControlled: true,
                     backgroundColor: Colors.white,
                     shape: const RoundedRectangleBorder(
-                      borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+                      borderRadius: BorderRadius.vertical(
+                        top: Radius.circular(24),
+                      ),
                     ),
-                    builder: (context) => JoinFamilyBottomSheet(userEmail: widget.userEmail),
+                    builder: (context) =>
+                        JoinFamilyBottomSheet(userEmail: widget.userEmail),
                   );
                 },
-                icon: const Icon(Icons.group_add_rounded, color: Colors.white, size: 22),
+                icon: const Icon(
+                  Icons.group_add_rounded,
+                  color: Colors.white,
+                  size: 22,
+                ),
                 label: const Text(
                   'Join with Invite Code',
                   style: TextStyle(
@@ -355,7 +427,9 @@ class _ChooseFamilyScreenState extends State<ChooseFamilyScreen> {
                 style: ElevatedButton.styleFrom(
                   backgroundColor: const Color(0xFF4A8B71),
                   minimumSize: const Size(double.infinity, 56),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(16),
+                  ),
                   elevation: 0,
                 ),
               ),

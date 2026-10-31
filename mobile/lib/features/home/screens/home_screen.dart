@@ -1,15 +1,27 @@
+import 'package:mobile/shared/widgets/main_navigation_shell.dart';
+import 'package:mobile/features/shopping/screens/shopping_screens.dart';
+import 'package:mobile/core/services/api_client.dart';
+import 'package:mobile/features/family/models/family_profile.dart';
+import 'package:flutter/foundation.dart';
+import 'package:mobile/core/services/api_config.dart';
 import 'dart:convert';
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 import '../../onboarding/screens/login_screen.dart';
 
 class HomeScreen extends StatefulWidget {
   final String userEmail;
+  final String familyId;
+  final ApiClient? client;
 
-  const HomeScreen({super.key, required this.userEmail});
+  const HomeScreen({
+    super.key,
+    required this.userEmail,
+    required this.familyId,
+    this.client,
+  });
 
   @override
   State<HomeScreen> createState() => _HomeScreenState();
@@ -18,9 +30,12 @@ class HomeScreen extends StatefulWidget {
 class _HomeScreenState extends State<HomeScreen> {
   bool _isLoading = true;
   String _familyName = 'Our Family';
-  String _inviteCode = 'Loading...';
+  String? _inviteCode;
+  String? _error;
+  int _generation = 0;
+  late final ApiClient _client = widget.client ?? ApiClient();
   String? _familyAvatarPath;
-  int _memberCount = 1;
+  int? _memberCount;
 
   @override
   void initState() {
@@ -28,39 +43,88 @@ class _HomeScreenState extends State<HomeScreen> {
     _fetchFamilyDetails();
   }
 
+  @override
+  void didUpdateWidget(covariant HomeScreen oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.familyId != widget.familyId ||
+        oldWidget.userEmail != widget.userEmail) {
+      _fetchFamilyDetails();
+    }
+  }
+
+  @override
+  void dispose() {
+    _generation++;
+    if (widget.client == null) _client.close();
+    super.dispose();
+  }
+
   Future<void> _fetchFamilyDetails() async {
+    final generation = ++_generation;
+    final familyId = widget.familyId;
+    setState(() {
+      _isLoading = true;
+      _error = null;
+      _inviteCode = null;
+      _memberCount = null;
+      _familyName = 'Loading family...';
+      _familyAvatarPath = null;
+    });
     try {
-      final prefs = await SharedPreferences.getInstance();
-      final jwtToken = prefs.getString('jwt_token');
-
-      final url = Uri.parse('http://localhost:8080/api/families/user?email=${widget.userEmail}');
-      final response = await http.get(
-        url,
-        headers: {
-          'Content-Type': 'application/json',
-          if (jwtToken != null) 'Authorization': 'Bearer $jwtToken',
-        },
+      FamilyProfile.uuid(familyId);
+      final response = await _client.get(
+        Uri.parse(
+          '${ApiConfig.baseUrl}/families/user',
+        ).replace(queryParameters: {'email': widget.userEmail}),
       );
-
-      if (response.statusCode == 200) {
-        final List<dynamic> families = jsonDecode(response.body);
-        if (families.isNotEmpty) {
-          setState(() {
-            _familyName = families[0]['name'] ?? 'Our Family';
-            _inviteCode = families[0]['inviteCode'] ?? 'HSH-DEMO2026';
-            _familyAvatarPath = families[0]['avatarPath'];
-            _memberCount = families[0]['memberCount'] ?? 1;
-            _isLoading = false;
-          });
-        } else {
-          setState(() => _isLoading = false);
-        }
-      } else {
-        setState(() => _isLoading = false);
+      final families = jsonDecode(response.body);
+      if (families is! List) {
+        throw const FormatException('Invalid families response');
       }
+      final family = families
+          .cast<Map>()
+          .where((item) => item['id'] == familyId)
+          .firstOrNull;
+      if (family == null) {
+        throw const ApiException(
+          'The selected family is unavailable. Please select your family again.',
+        );
+      }
+      final name = family['name'];
+      if (name is! String || name.trim().isEmpty) {
+        throw const FormatException('Missing family name');
+      }
+      final profilesResponse = await _client.get(
+        Uri.parse('${ApiConfig.baseUrl}/families/$familyId/profiles'),
+      );
+      final profiles = jsonDecode(profilesResponse.body);
+      if (profiles is! List) {
+        throw const FormatException('Invalid household profiles response');
+      }
+      final ids = profiles
+          .map(
+            (row) => FamilyProfile.fromJson(Map<String, dynamic>.from(row)).id,
+          )
+          .toSet();
+      if (ids.length != profiles.length) {
+        throw const FormatException('Duplicate household profiles');
+      }
+      if (!mounted || generation != _generation) return;
+      setState(() {
+        _familyName = name;
+        _familyAvatarPath = family['avatarPath'] as String?;
+        final code = family['inviteCode'];
+        _inviteCode = code is String && code.trim().isNotEmpty ? code : null;
+        _memberCount = profiles.length;
+        _isLoading = false;
+      });
     } catch (e) {
-      debugPrint("Error fetching family details for home screen: $e");
-      setState(() => _isLoading = false);
+      if (!mounted || generation != _generation) return;
+      setState(() {
+        _error = e.toString();
+        _familyName = 'Family unavailable';
+        _isLoading = false;
+      });
     }
   }
 
@@ -79,18 +143,25 @@ class _HomeScreenState extends State<HomeScreen> {
 
   Widget _buildAvatarImage(String? path, double size) {
     if (path == null || path.isEmpty) {
-      return Icon(Icons.family_restroom_rounded, color: const Color(0xFF4A8B71), size: size * 0.5);
+      return Icon(
+        Icons.family_restroom_rounded,
+        color: const Color(0xFF4A8B71),
+        size: size * 0.5,
+      );
     }
 
-    if (path.startsWith('/') || path.startsWith('file://')) {
+    if (!kIsWeb && (path.startsWith('/') || path.startsWith('file://'))) {
       final cleanPath = path.replaceFirst('file://', '');
       return Image.file(
         File(cleanPath),
         width: size,
         height: size,
         fit: BoxFit.cover,
-        errorBuilder: (context, error, stackTrace) =>
-            Icon(Icons.family_restroom_rounded, color: const Color(0xFF4A8B71), size: size * 0.5),
+        errorBuilder: (context, error, stackTrace) => Icon(
+          Icons.family_restroom_rounded,
+          color: const Color(0xFF4A8B71),
+          size: size * 0.5,
+        ),
       );
     }
 
@@ -100,12 +171,19 @@ class _HomeScreenState extends State<HomeScreen> {
         width: size,
         height: size,
         fit: BoxFit.cover,
-        errorBuilder: (context, error, stackTrace) =>
-            Icon(Icons.family_restroom_rounded, color: const Color(0xFF4A8B71), size: size * 0.5),
+        errorBuilder: (context, error, stackTrace) => Icon(
+          Icons.family_restroom_rounded,
+          color: const Color(0xFF4A8B71),
+          size: size * 0.5,
+        ),
       );
     }
 
-    return Icon(Icons.family_restroom_rounded, color: const Color(0xFF4A8B71), size: size * 0.5);
+    return Icon(
+      Icons.family_restroom_rounded,
+      color: const Color(0xFF4A8B71),
+      size: size * 0.5,
+    );
   }
 
   @override
@@ -129,12 +207,16 @@ class _HomeScreenState extends State<HomeScreen> {
               child: ClipOval(child: _buildAvatarImage(_familyAvatarPath, 36)),
             ),
             const SizedBox(width: 10),
-            Text(
-              _familyName,
-              style: const TextStyle(
-                color: Color(0xFF244032),
-                fontWeight: FontWeight.bold,
-                fontSize: 20,
+            Expanded(
+              child: Text(
+                _familyName,
+                style: const TextStyle(
+                  color: Color(0xFF244032),
+                  fontWeight: FontWeight.bold,
+                  fontSize: 20,
+                ),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
               ),
             ),
           ],
@@ -153,6 +235,13 @@ class _HomeScreenState extends State<HomeScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
+              if (_error != null) ...[
+                Text(_error!, style: const TextStyle(color: Colors.red)),
+                TextButton(
+                  onPressed: _fetchFamilyDetails,
+                  child: const Text('Retry'),
+                ),
+              ],
               // Welcome Banner
               Container(
                 width: double.infinity,
@@ -160,7 +249,10 @@ class _HomeScreenState extends State<HomeScreen> {
                 decoration: BoxDecoration(
                   color: const Color(0xFFE8F2ED),
                   borderRadius: BorderRadius.circular(20),
-                  border: Border.all(color: const Color(0xFFD0E0D8), width: 1.5),
+                  border: Border.all(
+                    color: const Color(0xFFD0E0D8),
+                    width: 1.5,
+                  ),
                 ),
                 child: Row(
                   children: [
@@ -170,7 +262,11 @@ class _HomeScreenState extends State<HomeScreen> {
                         children: [
                           const Text(
                             'Welcome back,',
-                            style: TextStyle(fontSize: 14, color: Color(0xFF4A8B71), fontWeight: FontWeight.w600),
+                            style: TextStyle(
+                              fontSize: 14,
+                              color: Color(0xFF4A8B71),
+                              fontWeight: FontWeight.w600,
+                            ),
                           ),
                           const SizedBox(height: 4),
                           Text(
@@ -183,8 +279,13 @@ class _HomeScreenState extends State<HomeScreen> {
                           ),
                           const SizedBox(height: 8),
                           Text(
-                            '$_memberCount family members connected.',
-                            style: const TextStyle(fontSize: 13, color: Colors.black54),
+                            _memberCount == null
+                                ? 'Loading household profiles...'
+                                : '$_memberCount household members.',
+                            style: const TextStyle(
+                              fontSize: 13,
+                              color: Colors.black54,
+                            ),
                           ),
                         ],
                       ),
@@ -195,9 +296,14 @@ class _HomeScreenState extends State<HomeScreen> {
                       decoration: BoxDecoration(
                         shape: BoxShape.circle,
                         color: Colors.white,
-                        border: Border.all(color: const Color(0xFF4A8B71), width: 2),
+                        border: Border.all(
+                          color: const Color(0xFF4A8B71),
+                          width: 2,
+                        ),
                       ),
-                      child: ClipOval(child: _buildAvatarImage(_familyAvatarPath, 60)),
+                      child: ClipOval(
+                        child: _buildAvatarImage(_familyAvatarPath, 60),
+                      ),
                     ),
                   ],
                 ),
@@ -211,7 +317,10 @@ class _HomeScreenState extends State<HomeScreen> {
                 decoration: BoxDecoration(
                   color: Colors.white,
                   borderRadius: BorderRadius.circular(16),
-                  border: Border.all(color: const Color(0xFF4A8B71).withValues(alpha: 0.3), width: 1.5),
+                  border: Border.all(
+                    color: const Color(0xFF4A8B71).withValues(alpha: 0.3),
+                    width: 1.5,
+                  ),
                 ),
                 child: Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -221,11 +330,17 @@ class _HomeScreenState extends State<HomeScreen> {
                       children: [
                         const Text(
                           'Family Invite Code',
-                          style: TextStyle(fontSize: 12, color: Colors.grey, fontWeight: FontWeight.bold),
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: Colors.grey,
+                            fontWeight: FontWeight.bold,
+                          ),
                         ),
                         const SizedBox(height: 4),
                         Text(
-                          _isLoading ? 'Loading code...' : _inviteCode,
+                          _isLoading
+                              ? 'Loading code...'
+                              : (_inviteCode ?? 'Invite code unavailable'),
                           style: const TextStyle(
                             fontSize: 16,
                             fontWeight: FontWeight.w900,
@@ -236,15 +351,22 @@ class _HomeScreenState extends State<HomeScreen> {
                       ],
                     ),
                     IconButton(
-                      icon: const Icon(Icons.copy_rounded, color: Color(0xFF4A8B71)),
+                      icon: const Icon(
+                        Icons.copy_rounded,
+                        color: Color(0xFF4A8B71),
+                      ),
                       tooltip: 'Copy Invite Code',
-                      onPressed: _isLoading
+                      onPressed: _isLoading || _inviteCode == null
                           ? null
                           : () {
-                              Clipboard.setData(ClipboardData(text: _inviteCode));
+                              Clipboard.setData(
+                                ClipboardData(text: _inviteCode!),
+                              );
                               ScaffoldMessenger.of(context).showSnackBar(
                                 const SnackBar(
-                                  content: Text("Invite code copied to clipboard!"),
+                                  content: Text(
+                                    "Invite code copied to clipboard!",
+                                  ),
                                   backgroundColor: Colors.green,
                                 ),
                               );
@@ -277,11 +399,12 @@ class _HomeScreenState extends State<HomeScreen> {
                     subtitle: 'View chores',
                     color: Colors.orange.shade50,
                     iconColor: Colors.orange.shade700,
-                    onTap: () {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(content: Text('Access Household Tasks from the bottom navigation bar.')),
-                      );
-                    },
+                    onTap: () => MainNavigationShell.navigate(
+                      context,
+                      userEmail: widget.userEmail,
+                      familyId: widget.familyId,
+                      index: 3,
+                    ),
                   ),
                   _buildFeatureCard(
                     icon: Icons.people_outline,
@@ -289,7 +412,12 @@ class _HomeScreenState extends State<HomeScreen> {
                     subtitle: 'Manage members',
                     color: Colors.blue.shade50,
                     iconColor: Colors.blue.shade700,
-                    onTap: () {},
+                    onTap: () => MainNavigationShell.navigate(
+                      context,
+                      userEmail: widget.userEmail,
+                      familyId: widget.familyId,
+                      index: 1,
+                    ),
                   ),
                   _buildFeatureCard(
                     icon: Icons.shopping_bag_outlined,
@@ -297,7 +425,15 @@ class _HomeScreenState extends State<HomeScreen> {
                     subtitle: 'Shared lists',
                     color: Colors.purple.shade50,
                     iconColor: Colors.purple.shade700,
-                    onTap: () {},
+                    onTap: () => Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => ShoppingScreen(
+                          userEmail: widget.userEmail,
+                          familyId: widget.familyId,
+                        ),
+                      ),
+                    ),
                   ),
                   _buildFeatureCard(
                     icon: Icons.settings_outlined,
@@ -305,7 +441,12 @@ class _HomeScreenState extends State<HomeScreen> {
                     subtitle: 'House preferences',
                     color: Colors.green.shade50,
                     iconColor: const Color(0xFF4A8B71),
-                    onTap: () {},
+                    onTap: () => MainNavigationShell.navigate(
+                      context,
+                      userEmail: widget.userEmail,
+                      familyId: widget.familyId,
+                      index: 4,
+                    ),
                   ),
                 ],
               ),

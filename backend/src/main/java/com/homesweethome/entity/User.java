@@ -1,6 +1,7 @@
 package com.homesweethome.entity;
 
 import jakarta.persistence.*;
+import com.fasterxml.jackson.annotation.JsonIncludeProperties;
 import lombok.*;
 import org.hibernate.annotations.CreationTimestamp;
 import org.hibernate.annotations.UpdateTimestamp;
@@ -19,6 +20,7 @@ import java.util.UUID;
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
+@JsonIncludeProperties({"id", "email"})
 // Add 'implements UserDetails' right here:
 public class User implements UserDetails {
 

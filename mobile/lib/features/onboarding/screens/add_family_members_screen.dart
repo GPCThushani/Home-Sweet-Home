@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'home_features_screen.dart';
 
 class FamilyMember {
@@ -43,10 +42,6 @@ class FamilyMember {
     if (normalizedGender == 'female') {
       return 'assets/images/family_members/female.jpg';
     }
-    if (normalizedGender == 'male') {
-      return 'assets/images/family_members/male.jpg';
-    }
-
     return 'assets/images/family_members/male.jpg';
   }
 }
@@ -79,85 +74,7 @@ class _AddFamilyMembersScreenState extends State<AddFamilyMembersScreen> {
     FamilyMember(name: "Daughter's Name", role: 'Daughter', gender: 'Female', hasAccount: false),
   ];
 
-  void _showInviteBottomSheet(FamilyMember member) {
-    final cleanRoleName = member.role.replaceAll(RegExp(r'[^a-zA-Z0-9]'), '').toLowerCase();
-    final inviteCode = "HSH-${cleanRoleName.toUpperCase()}-2026";
-    final inviteLink = "https://app.homesweethome.com/invite?code=$inviteCode&role=$cleanRoleName";
-
-    showModalBottomSheet(
-      context: context,
-      backgroundColor: Colors.white,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
-      ),
-      builder: (context) {
-        return Padding(
-          padding: const EdgeInsets.all(24.0),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                'Invite ${member.isPlaceholder ? member.role : member.name}',
-                style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Color(0xFF244032)),
-              ),
-              const SizedBox(height: 8),
-              Text(
-                'Share this secure link so they can create an account and join your family space.',
-                style: TextStyle(fontSize: 13, color: Colors.grey.shade600),
-              ),
-              const SizedBox(height: 20),
-              Container(
-                padding: const EdgeInsets.all(16),
-                decoration: BoxDecoration(
-                  color: const Color(0xFFE8F2ED),
-                  borderRadius: BorderRadius.circular(16),
-                  border: Border.all(color: const Color(0xFFD0E0D8)),
-                ),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Expanded(
-                      child: Text(
-                        inviteLink,
-                        style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: Color(0xFF244032)),
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                    ),
-                    IconButton(
-                      icon: const Icon(Icons.copy_rounded, color: Color(0xFF4A8B71)),
-                      onPressed: () {
-                        Clipboard.setData(ClipboardData(text: inviteLink));
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(content: Text("Invite link copied to clipboard!"), backgroundColor: Colors.green),
-                        );
-                      },
-                    ),
-                  ],
-                ),
-              ),
-              const SizedBox(height: 24),
-              ElevatedButton.icon(
-                onPressed: () {
-                  Navigator.pop(context);
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text("Invite link ready for sharing!"), backgroundColor: Colors.green),
-                  );
-                },
-                icon: const Icon(Icons.share_rounded, color: Colors.white),
-                label: const Text('Share Invite Link', style: TextStyle(fontSize: 16, color: Colors.white, fontWeight: FontWeight.bold)),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFF4A8B71),
-                  minimumSize: const Size(double.infinity, 52),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-                ),
-              ),
-            ],
-          ),
-        );
-      },
-    );
-  }
+  int _creatorProfileIndex = 0;
 
   void _showMemberDialog({FamilyMember? memberToEdit, int? index}) {
     final initialName = (memberToEdit == null || memberToEdit.isPlaceholder) ? '' : memberToEdit.name;
@@ -253,11 +170,9 @@ class _AddFamilyMembersScreenState extends State<AddFamilyMembersScreen> {
                       controller: customRoleController,
                       decoration: InputDecoration(
                         labelText: 'Specify Relation (e.g. Uncle, Aunty, Cousin)',
-                        hintText: 'Enter relation...',
                         filled: true,
                         fillColor: const Color(0xFFF8FAF9),
                         border: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: BorderSide.none),
-                        focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: const BorderSide(color: Color(0xFF4A8B71))),
                       ),
                     ),
                     const SizedBox(height: 16),
@@ -290,7 +205,8 @@ class _AddFamilyMembersScreenState extends State<AddFamilyMembersScreen> {
                     title: const Text('Allow member to sign in', style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: Color(0xFF244032))),
                     subtitle: const Text('Generates an invite link for them', style: TextStyle(fontSize: 12, color: Colors.grey)),
                     value: needsAccount,
-                    activeThumbColor: const Color(0xFF4A8B71),
+                    // ignore: deprecated_member_use
+                    activeColor: const Color(0xFF4A8B71),
                     onChanged: (val) => setModalState(() => needsAccount = val),
                   ),
                   const SizedBox(height: 24),
@@ -336,11 +252,18 @@ class _AddFamilyMembersScreenState extends State<AddFamilyMembersScreen> {
   }
 
   void _confirmDelete(int index) {
+    if (_members.length <= 1) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("You must keep at least one family member profile.")),
+      );
+      return;
+    }
+
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
         title: const Text('Remove Member'),
-        content: Text('Are you sure you want to remove ${_members[index].role} from the list?'),
+        content: Text('Are you sure you want to remove ${_members[index].name} from the roster?'),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context),
@@ -348,7 +271,12 @@ class _AddFamilyMembersScreenState extends State<AddFamilyMembersScreen> {
           ),
           TextButton(
             onPressed: () {
-              setState(() => _members.removeAt(index));
+              setState(() {
+                _members.removeAt(index);
+                if (_creatorProfileIndex >= _members.length) {
+                  _creatorProfileIndex = _members.length - 1;
+                }
+              });
               Navigator.pop(context);
             },
             child: const Text('Delete', style: TextStyle(color: Colors.red)),
@@ -376,117 +304,102 @@ class _AddFamilyMembersScreenState extends State<AddFamilyMembersScreen> {
         centerTitle: true,
       ),
       body: SafeArea(
-        child: SingleChildScrollView(
+        child: Padding(
           padding: const EdgeInsets.symmetric(horizontal: 24.0, vertical: 12.0),
           child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              ListView.builder(
-                itemCount: _members.length,
-                shrinkWrap: true,
-                physics: const NeverScrollableScrollPhysics(),
-                itemBuilder: (context, index) {
-                  final member = _members[index];
-                  return Container(
-                    margin: const EdgeInsets.only(bottom: 12),
-                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                    decoration: BoxDecoration(
-                      color: Colors.white,
-                      borderRadius: BorderRadius.circular(16),
-                      border: Border.all(color: Colors.grey.shade200, width: 1.5),
-                      boxShadow: [
-                        BoxShadow(
-                          color: Colors.black.withValues(alpha: 0.01),
-                          blurRadius: 6,
-                          offset: const Offset(0, 3),
+              const Text(
+                'Select which profile corresponds to YOU (The Creator):',
+                style: TextStyle(fontSize: 13, color: Color(0xFF4A8B71), fontWeight: FontWeight.bold),
+              ),
+              const SizedBox(height: 12),
+              Expanded(
+                child: ListView.builder(
+                  itemCount: _members.length,
+                  itemBuilder: (context, index) {
+                    final member = _members[index];
+                    final isCreator = _creatorProfileIndex == index;
+                    return Container(
+                      margin: const EdgeInsets.only(bottom: 12),
+                      decoration: BoxDecoration(
+                        color: isCreator ? const Color(0xFFE8F2ED) : Colors.white,
+                        borderRadius: BorderRadius.circular(16),
+                        border: Border.all(
+                          color: isCreator ? const Color(0xFF4A8B71) : Colors.grey.shade200,
+                          width: isCreator ? 2 : 1.5,
                         ),
-                      ],
-                    ),
-                    child: Row(
-                      children: [
-                        CircleAvatar(
-                          radius: 24,
-                          backgroundColor: const Color(0xFFE8F2ED),
-                          child: ClipOval(
-                            child: Image.asset(
-                              member.avatarAsset,
-                              width: 48,
-                              height: 48,
-                              fit: BoxFit.cover,
-                              errorBuilder: (context, error, stackTrace) => const Icon(Icons.person, color: Color(0xFF4A8B71)),
-                            ),
-                          ),
-                        ),
-                        const SizedBox(width: 12),
-                        Expanded(
-                          child: InkWell(
-                            onTap: () => _showMemberDialog(memberToEdit: member, index: index),
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(
-                                  member.name,
-                                  style: TextStyle(
-                                    fontSize: member.isPlaceholder ? 14 : 15,
-                                    fontWeight: member.isPlaceholder ? FontWeight.w500 : FontWeight.bold,
-                                    color: member.isPlaceholder ? Colors.grey.shade400 : const Color(0xFF244032),
-                                    fontStyle: member.isPlaceholder ? FontStyle.italic : FontStyle.normal,
+                      ),
+                      child: InkWell(
+                        onTap: () => _showMemberDialog(memberToEdit: member, index: index),
+                        borderRadius: BorderRadius.circular(16),
+                        child: Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                          child: Row(
+                            children: [
+                              Radio<int>(
+                                value: index,
+                                // ignore: deprecated_member_use
+                                groupValue: _creatorProfileIndex,
+                                activeColor: const Color(0xFF4A8B71),
+                                // ignore: deprecated_member_use
+                                onChanged: (val) {
+                                  if (val != null) setState(() => _creatorProfileIndex = val);
+                                },
+                              ),
+                              const SizedBox(width: 4),
+                              CircleAvatar(
+                                radius: 22,
+                                backgroundColor: const Color(0xFFE8F2ED),
+                                child: ClipOval(
+                                  child: Image.asset(
+                                    member.avatarAsset,
+                                    width: 44,
+                                    height: 44,
+                                    fit: BoxFit.cover,
+                                    errorBuilder: (context, error, stackTrace) =>
+                                        const Icon(Icons.person, color: Color(0xFF4A8B71), size: 22),
                                   ),
-                                  overflow: TextOverflow.ellipsis,
                                 ),
-                                const SizedBox(height: 2),
-                                Wrap(
-                                  crossAxisAlignment: WrapCrossAlignment.center,
-                                  spacing: 6.0,
+                              ),
+                              const SizedBox(width: 12),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
                                     Text(
-                                      member.role,
-                                      style: TextStyle(fontSize: 12, color: Colors.grey.shade500, fontWeight: FontWeight.w500),
-                                    ),
-                                    if (member.hasAccount)
-                                      Container(
-                                        padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
-                                        decoration: BoxDecoration(
-                                          color: const Color(0xFFE8F2ED),
-                                          borderRadius: BorderRadius.circular(6),
-                                        ),
-                                        child: const Text('App Access', style: TextStyle(fontSize: 9, color: Color(0xFF4A8B71), fontWeight: FontWeight.bold)),
+                                      member.name,
+                                      style: TextStyle(
+                                        fontSize: 15,
+                                        fontWeight: FontWeight.bold,
+                                        color: member.isPlaceholder ? Colors.grey.shade400 : const Color(0xFF244032),
                                       ),
+                                    ),
+                                    const SizedBox(height: 2),
+                                    Text(
+                                      member.role,
+                                      style: TextStyle(fontSize: 12, color: Colors.grey.shade600, fontWeight: FontWeight.w500),
+                                    ),
                                   ],
                                 ),
-                              ],
-                            ),
+                              ),
+                              IconButton(
+                                icon: Icon(Icons.edit_outlined, size: 18, color: Colors.grey.shade600),
+                                tooltip: 'Edit Member',
+                                onPressed: () => _showMemberDialog(memberToEdit: member, index: index),
+                              ),
+                              IconButton(
+                                icon: const Icon(Icons.delete_outline_rounded, size: 18, color: Colors.redAccent),
+                                tooltip: 'Remove Member',
+                                onPressed: () => _confirmDelete(index),
+                              ),
+                            ],
                           ),
                         ),
-                        Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            if (member.hasAccount)
-                              IconButton(
-                                constraints: const BoxConstraints(),
-                                padding: const EdgeInsets.all(6),
-                                icon: const Icon(Icons.share_rounded, size: 18, color: Color(0xFF4A8B71)),
-                                tooltip: 'Send Invite',
-                                onPressed: () => _showInviteBottomSheet(member),
-                              ),
-                            IconButton(
-                              constraints: const BoxConstraints(),
-                              padding: const EdgeInsets.all(6),
-                              icon: Icon(Icons.edit_outlined, size: 18, color: Colors.grey.shade600),
-                              onPressed: () => _showMemberDialog(memberToEdit: member, index: index),
-                            ),
-                            IconButton(
-                              constraints: const BoxConstraints(),
-                              padding: const EdgeInsets.all(6),
-                              icon: const Icon(Icons.delete_outline_rounded, size: 18, color: Colors.redAccent),
-                              tooltip: 'Remove Member',
-                              onPressed: () => _confirmDelete(index),
-                            ),
-                          ],
-                        ),
-                      ],
-                    ),
-                  );
-                },
+                      ),
+                    );
+                  },
+                ),
               ),
               const SizedBox(height: 12),
               OutlinedButton.icon(
@@ -503,6 +416,13 @@ class _AddFamilyMembersScreenState extends State<AddFamilyMembersScreen> {
               const SizedBox(height: 16),
               ElevatedButton(
                 onPressed: () {
+                  final serializedMembers = _members.map((m) => {
+                    'name': m.isPlaceholder ? m.role : m.name,
+                    'role': m.role,
+                    'gender': m.gender,
+                    'invitePreferred': m.hasAccount,
+                  }).toList();
+
                   Navigator.push(
                     context,
                     MaterialPageRoute(
@@ -513,6 +433,8 @@ class _AddFamilyMembersScreenState extends State<AddFamilyMembersScreen> {
                         presetAvatarIndex: widget.presetAvatarIndex,
                         memberCount: _members.length,
                         userEmail: widget.userEmail,
+                        familyMembers: serializedMembers,
+                        creatorProfileIndex: _creatorProfileIndex,
                       ),
                     ),
                   );

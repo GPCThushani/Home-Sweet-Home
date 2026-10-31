@@ -1,8 +1,9 @@
+import 'package:mobile/shared/widgets/main_navigation_shell.dart';
+import 'package:mobile/core/services/api_config.dart';
 import 'dart:convert';
 import 'package:flutter/material.dart';
-import 'package:http/http.dart' as http;
+import 'package:mobile/core/services/authenticated_http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
-import '../../tasks/screens/global_tasks_screen.dart';
 
 class PlantsGardenScreen extends StatefulWidget {
   final String userEmail;
@@ -19,8 +20,8 @@ class PlantsGardenScreen extends StatefulWidget {
 }
 
 class _PlantsGardenScreenState extends State<PlantsGardenScreen> {
-  static const String baseUrl = 'http://localhost:8080/api/garden';
-  int _currentNavIndex = 4;
+  static final String baseUrl = '${ApiConfig.baseUrl}/garden';
+  final int _currentNavIndex = 4;
 
   bool _isLoading = true;
 
@@ -123,7 +124,7 @@ class _PlantsGardenScreenState extends State<PlantsGardenScreen> {
 
       // 4. Fetch Garden Shopping Needs
       final shoppingRes = await http.get(
-        Uri.parse('http://localhost:8080/api/shopping/${widget.familyId}'),
+        Uri.parse('${ApiConfig.baseUrl}/shopping/${widget.familyId}'),
         headers: headers,
       );
       List<Map<String, dynamic>> loadedNeeds = [];
@@ -146,7 +147,7 @@ class _PlantsGardenScreenState extends State<PlantsGardenScreen> {
         for (final name in defaultNeeds) {
           try {
             final postRes = await http.post(
-              Uri.parse('http://localhost:8080/api/shopping/${widget.familyId}'),
+              Uri.parse('${ApiConfig.baseUrl}/shopping/${widget.familyId}'),
               headers: headers,
               body: jsonEncode({
                 'name': name,
@@ -499,22 +500,7 @@ class _PlantsGardenScreenState extends State<PlantsGardenScreen> {
             BottomNavigationBarItem(icon: Icon(Icons.task_outlined), activeIcon: Icon(Icons.task_rounded), label: 'Tasks'),
             BottomNavigationBarItem(icon: Icon(Icons.menu_outlined), activeIcon: Icon(Icons.menu_rounded), label: 'More'),
           ],
-          onTap: (index) {
-            setState(() => _currentNavIndex = index);
-            if (index == 3) {
-              Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (context) => GlobalTasksScreen(
-                    userEmail: widget.userEmail,
-                    familyId: widget.familyId,
-                  ),
-                ),
-              );
-            } else if (index != 4) {
-              Navigator.maybePop(context);
-            }
-          },
+          onTap: (index) => MainNavigationShell.navigate(context, userEmail: widget.userEmail, familyId: widget.familyId, index: index),
         ),
       ),
     );
@@ -594,7 +580,7 @@ class _PlantsGardenScreenState extends State<PlantsGardenScreen> {
     if (id != null) {
       try {
         final headers = await _headers();
-        await http.delete(Uri.parse('http://localhost:8080/api/shopping/${widget.familyId}/item/$id'), headers: headers);
+        await http.delete(Uri.parse('${ApiConfig.baseUrl}/shopping/${widget.familyId}/item/$id'), headers: headers);
       } catch (_) {}
     }
   }
@@ -907,7 +893,7 @@ class _PlantsGardenScreenState extends State<PlantsGardenScreen> {
                 try {
                   final headers = await _headers();
                   final res = await http.post(
-                    Uri.parse('http://localhost:8080/api/shopping/${widget.familyId}'),
+                    Uri.parse('${ApiConfig.baseUrl}/shopping/${widget.familyId}'),
                     headers: headers,
                     body: jsonEncode({
                       'name': text,
