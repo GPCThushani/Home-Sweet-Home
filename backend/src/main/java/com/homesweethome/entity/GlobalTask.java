@@ -63,4 +63,8 @@ public class GlobalTask {
     private ZonedDateTime createdAt;
 
     private ZonedDateTime completedAt;
+
+    private UUID sourcePetId;
+    private UUID sourceCareScheduleId;
+    private UUID sourcePetEntryId;
 }

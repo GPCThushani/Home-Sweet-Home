@@ -9,7 +9,8 @@ import java.util.UUID;
 // Hibernate entities, user credentials, or unrelated family/account fields.
 public record TaskResponse(UUID id, FamilyRef family, String title, String description,
         String originModule, String status, MemberRef assignedTo, MemberRef createdBy,
-        MemberRef completedBy, ZonedDateTime dueDate, ZonedDateTime createdAt, ZonedDateTime completedAt) {
+        MemberRef completedBy, ZonedDateTime dueDate, ZonedDateTime createdAt, ZonedDateTime completedAt,
+        UUID sourcePetId, UUID sourceCareScheduleId, UUID sourcePetEntryId) {
     public record FamilyRef(UUID id) {}
     public record UserRef(UUID id, String email) {}
     public record MemberRef(UUID id, String nickname, UserRef user) {
@@ -22,6 +23,7 @@ public record TaskResponse(UUID id, FamilyRef family, String title, String descr
         return new TaskResponse(task.getId(), new FamilyRef(task.getFamily().getId()), task.getTitle(),
             task.getDescription(), task.getOriginModule(), task.getStatus(), MemberRef.from(task.getAssignedTo()),
             MemberRef.from(task.getCreatedBy()), MemberRef.from(task.getCompletedBy()), task.getDueDate(),
-            task.getCreatedAt(), task.getCompletedAt());
+            task.getCreatedAt(), task.getCompletedAt(), task.getSourcePetId(),
+            task.getSourceCareScheduleId(), task.getSourcePetEntryId());
     }
 }

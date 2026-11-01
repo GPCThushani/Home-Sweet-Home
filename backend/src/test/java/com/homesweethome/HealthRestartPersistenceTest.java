@@ -23,6 +23,7 @@ class HealthRestartPersistenceTest {
             "--server.port=0", "--spring.datasource.url=jdbc:h2:file:" + temporary.resolve("health").toAbsolutePath().toString().replace('\\', '/') + ";MODE=PostgreSQL",
             "--spring.datasource.driver-class-name=org.h2.Driver", "--spring.datasource.username=sa", "--spring.datasource.password=",
             "--spring.jpa.database-platform=org.hibernate.dialect.H2Dialect", "--spring.jpa.hibernate.ddl-auto=" + ddl,
+            "--spring.sql.init.mode=never",
             "--security.jwt.secret=" + Base64.getEncoder().encodeToString(new byte[32]),
             "--spring.jpa.show-sql=false", "--logging.level.root=ERROR");
     }

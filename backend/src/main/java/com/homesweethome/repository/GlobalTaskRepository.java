@@ -15,4 +15,8 @@ public interface GlobalTaskRepository extends JpaRepository<GlobalTask, UUID> {
     
     // Fetch ALL tasks (pending and completed) for the family feed
     List<GlobalTask> findByFamilyIdOrderByCreatedAtDesc(UUID familyId);
+    List<GlobalTask> findBySourceCareScheduleId(UUID id);
+    List<GlobalTask> findBySourcePetEntryId(UUID id);
+    List<GlobalTask> findBySourcePetIdAndStatusOrderByCompletedAtDesc(UUID petId, String status);
+    List<GlobalTask> findBySourcePetId(UUID petId);
 }

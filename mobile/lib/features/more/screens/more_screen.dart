@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../../health/screens/health_screen.dart';
 import '../../shopping/screens/shopping_screens.dart';
+import '../../pets/screens/pets_screen.dart';
 import '../../garden/screens/plants_garden_screen.dart';
 import '../../maintenance/screens/home_maintenance_screen.dart';
 import '../../together/screens/together_screen.dart';
@@ -67,6 +68,13 @@ class _MoreScreenState extends State<MoreScreen> {
                 iconColor: Colors.orange.shade700,
                 title: 'Shopping',
                 onTap: () => _navigateToShopping(context),
+              ),
+              _buildDivider(),
+              _buildMenuItem(
+                icon: Icons.pets_rounded,
+                iconColor: Colors.teal.shade700,
+                title: 'Pets',
+                onTap: () => _navigateToPets(context),
               ),
               _buildDivider(),
               _buildMenuItem(
@@ -171,6 +179,18 @@ class _MoreScreenState extends State<MoreScreen> {
     );
   }
 
+  void _navigateToPets(BuildContext context) {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => PetsScreen(
+          userEmail: widget.userEmail,
+          familyId: widget.familyId,
+        ),
+      ),
+    );
+  }
+
   void _navigateToGarden(BuildContext context) {
     Navigator.push(
       context,
@@ -213,7 +233,8 @@ class _MoreScreenState extends State<MoreScreen> {
       MaterialPageRoute(
         builder: (context) => DocumentsScreen(
           userEmail: widget.userEmail,
-          familyId: widget.familyId, familyMembers: [],
+          familyId: widget.familyId,
+          familyMembers: const [],
         ),
       ),
     );
@@ -298,150 +319,6 @@ class _MoreScreenState extends State<MoreScreen> {
         content: Text('$moduleName module coming soon!'),
         backgroundColor: const Color(0xFF4A8B71),
         duration: const Duration(seconds: 1),
-      ),
-    );
-  }
-}
-
-// --- FINALIZED DOCUMENTS SCREEN ---
-// ignore: unused_element
-class _LegacyDocumentsPlaceholder extends StatelessWidget {
-  final String userEmail;
-  final String familyId;
-
-  const _LegacyDocumentsPlaceholder({
-    required this.userEmail,
-    required this.familyId,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: const Color(0xFFFAF8F3),
-      appBar: AppBar(
-        backgroundColor: Colors.transparent,
-        elevation: 0,
-        iconTheme: const IconThemeData(color: Color(0xFF244032)),
-        title: const Text(
-          'Family Documents',
-          style: TextStyle(
-            color: Color(0xFF244032),
-            fontWeight: FontWeight.bold,
-            fontSize: 20,
-          ),
-        ),
-      ),
-      body: SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.all(20),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Container(
-                padding: const EdgeInsets.all(16),
-                decoration: BoxDecoration(
-                  color: const Color(0xFFE5EEE7),
-                  borderRadius: BorderRadius.circular(16),
-                  border: Border.all(color: const Color(0xFF4A8B71).withValues(alpha: 0.2)),
-                ),
-                child: Row(
-                  children: [
-                    const Icon(Icons.folder_shared_rounded, color: Color(0xFF355C4A), size: 28),
-                    const SizedBox(width: 14),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: const [
-                          Text(
-                            'Secure Family Vault',
-                            style: TextStyle(
-                              color: Color(0xFF244032),
-                              fontWeight: FontWeight.bold,
-                              fontSize: 15,
-                            ),
-                          ),
-                          SizedBox(height: 2),
-                          Text(
-                            'Store important deeds, insurance policies, IDs, and records safely.',
-                            style: TextStyle(color: Color(0xFF65716B), fontSize: 12),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              const SizedBox(height: 24),
-              const Text(
-                'Categories',
-                style: TextStyle(
-                  color: Color(0xFF244032),
-                  fontWeight: FontWeight.bold,
-                  fontSize: 16,
-                ),
-              ),
-              const SizedBox(height: 12),
-              Expanded(
-                child: GridView.count(
-                  crossAxisCount: 2,
-                  crossAxisSpacing: 12,
-                  mainAxisSpacing: 12,
-                  childAspectRatio: 1.3,
-                  children: [
-                    _docCategoryCard(context, 'Legal & Deeds', Icons.gavel_rounded, Colors.indigo),
-                    _docCategoryCard(context, 'Insurance', Icons.security_rounded, Colors.teal),
-                    _docCategoryCard(context, 'Identities & Passports', Icons.badge_rounded, Colors.amber.shade800),
-                    _docCategoryCard(context, 'Warranties & Manuals', Icons.book_rounded, Colors.brown),
-                  ],
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-      floatingActionButton: FloatingActionButton(
-        backgroundColor: const Color(0xFF355C4A),
-        foregroundColor: Colors.white,
-        onPressed: () {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Document upload dialog coming soon!')),
-          );
-        },
-        child: const Icon(Icons.add_rounded),
-      ),
-    );
-  }
-
-  Widget _docCategoryCard(BuildContext context, String title, IconData icon, Color color) {
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: Colors.grey.shade200),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.02),
-            blurRadius: 6,
-            offset: const Offset(0, 3),
-          ),
-        ],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Icon(icon, color: color, size: 26),
-          const SizedBox(height: 10),
-          Text(
-            title,
-            style: const TextStyle(
-              color: Color(0xFF244032),
-              fontWeight: FontWeight.bold,
-              fontSize: 13,
-            ),
-          ),
-        ],
       ),
     );
   }

@@ -69,6 +69,8 @@ public class GlobalTaskService {
             ZonedDateTime dueDate
     ) {
         GlobalTask task = locked(taskId);
+        if (task.getSourceCareScheduleId() != null || task.getSourcePetEntryId() != null)
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "Edit this task through its pet schedule or visit");
 
         validate(title, originModule);
         if (assignedTo != null && !task.getFamily().getId().equals(assignedTo.getFamily().getId())) throw new AccessDeniedException("Assignee belongs to another family");
@@ -97,6 +99,8 @@ public class GlobalTaskService {
     @Transactional
     public void deleteTask(UUID taskId) {
         GlobalTask task = locked(taskId);
+        if (task.getSourceCareScheduleId() != null || task.getSourcePetEntryId() != null)
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "Manage this task from the Pets screen");
         globalTaskRepository.delete(task);
     }
     private GlobalTask locked(UUID id) {
