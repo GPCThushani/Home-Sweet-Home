@@ -7,6 +7,9 @@ import '../../maintenance/screens/home_maintenance_screen.dart';
 import '../../together/screens/together_screen.dart';
 import '../../documents/screens/documents_screen.dart';
 import '../../emergency/screens/emergency_contacts_screen.dart';
+import '../../settings/screens/notifications_screen.dart';
+import '../../settings/screens/privacy_screen.dart';
+import '../../settings/screens/app_settings_screen.dart';
 
 class MoreScreen extends StatefulWidget {
   final String userEmail;
@@ -249,8 +252,39 @@ class _MoreScreenState extends State<MoreScreen> {
           userEmail: widget.userEmail,
           familyId: widget.familyId,
           familyMembers: const [],
-        ), //Emergency Contacts
+        ),
       ),
+    );
+  }
+
+  void _navigateTo(BuildContext context, String moduleName) {
+    Widget screen;
+    switch (moduleName) {
+      case 'Notifications':
+        screen = NotificationsScreen(
+          userEmail: widget.userEmail,
+          familyId: widget.familyId,
+        );
+        break;
+      case 'Privacy & Permissions':
+        screen = PrivacyScreen(
+          userEmail: widget.userEmail,
+          familyId: widget.familyId,
+        );
+        break;
+      case 'Settings':
+        screen = AppSettingsScreen(
+          userEmail: widget.userEmail,
+          familyId: widget.familyId,
+        );
+        break;
+      default:
+        return;
+    }
+
+    Navigator.push(
+      context,
+      MaterialPageRoute(builder: (context) => screen),
     );
   }
 
@@ -324,16 +358,6 @@ class _MoreScreenState extends State<MoreScreen> {
       thickness: 1,
       color: Colors.grey.shade100,
       indent: 60,
-    );
-  }
-
-  void _navigateTo(BuildContext context, String moduleName) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text('$moduleName module coming soon!'),
-        backgroundColor: const Color(0xFF4A8B71),
-        duration: const Duration(seconds: 1),
-      ),
     );
   }
 }

@@ -50,7 +50,8 @@ public class SecurityConfig {
                     "/api/health/**",
                     "/api/documents/**",
                     "/api/pets/**",
-                    "/api/emergency-contacts/**"
+                    "/api/emergency-contacts/**",
+                    "/api/settings/**"
                 ).permitAll()
 
                 .requestMatchers(
