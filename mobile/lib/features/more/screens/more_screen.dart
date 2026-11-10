@@ -6,6 +6,7 @@ import '../../garden/screens/plants_garden_screen.dart';
 import '../../maintenance/screens/home_maintenance_screen.dart';
 import '../../together/screens/together_screen.dart';
 import '../../documents/screens/documents_screen.dart';
+import '../../emergency/screens/emergency_contacts_screen.dart';
 
 class MoreScreen extends StatefulWidget {
   final String userEmail;
@@ -109,7 +110,7 @@ class _MoreScreenState extends State<MoreScreen> {
                 icon: Icons.emergency_outlined,
                 iconColor: Colors.red.shade600,
                 title: 'Emergency Contacts',
-                onTap: () => _navigateTo(context, 'Emergency Contacts'),
+                onTap: () => _navigateToEmergencyContacts(context),
               ),
             ]),
 
@@ -236,6 +237,19 @@ class _MoreScreenState extends State<MoreScreen> {
           familyId: widget.familyId,
           familyMembers: const [],
         ),
+      ),
+    );
+  }
+
+  void _navigateToEmergencyContacts(BuildContext context) {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => EmergencyContactsScreen(
+          userEmail: widget.userEmail,
+          familyId: widget.familyId,
+          familyMembers: const [],
+        ), //Emergency Contacts
       ),
     );
   }

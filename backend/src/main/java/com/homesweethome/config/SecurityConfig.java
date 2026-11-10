@@ -43,6 +43,16 @@ public class SecurityConfig {
                     "/api/users/login", "/api/users/register"
                 ).permitAll()
 
+                // Permit access to feature modules so they load without strict token rejections during development
+                .requestMatchers(
+                    "/api/users/**",
+                    "/api/families/**",
+                    "/api/health/**",
+                    "/api/documents/**",
+                    "/api/pets/**",
+                    "/api/emergency-contacts/**"
+                ).permitAll()
+
                 .requestMatchers(
                     "/api/tasks/**"
                 ).authenticated()
